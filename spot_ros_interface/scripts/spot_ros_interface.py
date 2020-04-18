@@ -13,13 +13,14 @@ import bosdyn.geometry
 
 from bosdyn.client.image import ImageClient
 from bosdyn.client.robot_command import RobotCommandBuilder, RobotCommandClient
-from bosdyn.api import trajectory_pb2
+from bosdyn.api import trajectory_pb2, image_pb2
 
 # ROS specific imports
 import rospy
-from geometry_msgs.msg import Twist, Pose
-from std_msgs.msg import Float32
-from sensor_msgs import Image
+import geometry_msgs.msg
+import std_msgs.msg
+import sensor_msgs.msg
+
 
 class SpotInterface:
     '''Callbacks for an instance of a Spot robot'''
@@ -38,9 +39,14 @@ class SpotInterface:
         self.robot = self.sdk.create_robot(config.hostname)
         self.robot.authenticate(config.username, config.password)
         self.robot.time_sync.wait_for_sync()
-        
+
+        # Client to send cmds to Spot
         self.command_client = self.robot.ensure_client(
             RobotCommandClient.default_service_name)
+
+        # Client to request images from Spot
+        self.image_client = self.robot.ensure_client(
+            ImageClient.default_service_name)
 
         # Spot requires a software estop to be activated.
         estop_client = self.robot.ensure_client(
@@ -53,10 +59,10 @@ class SpotInterface:
         self.lease_client = self.robot.ensure_client(
             bosdyn.client.lease.LeaseClient.default_service_name)
         self.lease = self.lease_client.acquire()
-        
 
     # Callback functions
     # TODO: Should each callback check that inputs are within bounds?
+
     def stand_cb(self, height):
         """Callback that sends stand cmd at a given height delta [m] from standard configuration"""
         # TODO: Pick a msg type that allows for body rotations while standing
@@ -64,7 +70,8 @@ class SpotInterface:
         self.robot.logger.info("Commanding robot to stand...")
         cmd = RobotCommandBuilder.stand_command(body_height=height)
         self.command_client.robot_command(cmd)
-        self.robot.logger.info("Robot stand cmd sent. Height: {}".format(height))
+        self.robot.logger.info(
+            "Robot stand cmd sent. Height: {}".format(height))
 
     def trajectory_cb(self, pose):
         '''Callback that specifies a waypoint (Point) [m] with a final orientation [rad]'''
@@ -74,19 +81,19 @@ class SpotInterface:
 
         x = pose.position.x
         y = pose.position.y
-        heading = 0 # TODO: Convert pose.orientation (quaterion) into EulerZYX (y,p,r)
+        # TODO: Convert pose.orientation (quaterion) into EulerZYX (y,p,r)
+        heading = 0
 
         cmd = RobotCommandBuilder.trajectory_command(
-            goal_x =x,
-            goal_y =y,
-            goal_heading = heading,
-            frame = trajectory_pb2.bosdyn_dot_api_dot_geometry__pb2.FRAME_BODY,
+            goal_x=x,
+            goal_y=y,
+            goal_heading=heading,
+            frame=trajectory_pb2.bosdyn_dot_api_dot_geometry__pb2.FRAME_BODY,
         )
         self.command_client.robot_command_async(
             cmd,
             end_time_secs=time.time() + self.VELOCITY_CMD_DURATION
         )
-
 
 
     def velocity_cb(self, twist):
@@ -106,37 +113,59 @@ class SpotInterface:
             cmd,
             end_time_secs=time.time() + self.VELOCITY_CMD_DURATION
         )
-        self.robot.logger.info("Robot velocity cmd sent: v_x=${},v_y=${},v_rot${}".format(v_x, v_y, v_rot))
-
+        self.robot.logger.info(
+            "Robot velocity cmd sent: v_x=${},v_y=${},v_rot${}".format(v_x, v_y, v_rot))
 
     def start_spot_ros_interface(self):
 
         # ROS Node initialization
         rospy.init_node('spot_ros_interface_py')
-        rate = rospy.Rate(10) # Update at 10hz
+        rate = rospy.Rate(10)  # Update at 10hz
 
         # Specify topics interface will subscribe to
         # Each subscriber/topic will handle a specific command to Spot instance
-        
-        rospy.Subscriber("velocity_cmd", Twist, self.velocity_cb)
-        rospy.Subscriber("stand_cmd", Float32, self.stand_cb)
-        rospy.Subscriber("trajectory_cmd", Pose, self.trajectory_cb)
 
-        # image_pub = rospy.Publisher("image", , queue_size=10) # TODO: Publish Image(s)
+        rospy.Subscriber("velocity_cmd", geometry_msgs.msg.Twist, self.velocity_cb)
+        rospy.Subscriber("stand_cmd", std_msgs.msg.Float32, self.stand_cb)
+        rospy.Subscriber("trajectory_cmd", geometry_msgs.msg.Pose, self.trajectory_cb)
+
+        # Single image publisher will publish all images from all Spot cameras
+        image_pub = rospy.Publisher(
+            "image", sensor_msgs.msg.Image, queue_size=20)
         # state_pub = rospy.Publisher("state", ,queue_size=10) # TODO: Publish robot state
 
         try:
             with bosdyn.client.lease.LeaseKeepAlive(self.lease_client), bosdyn.client.estop.EstopKeepAlive(
                     self.estop_endpoint):
-                self.robot.logger.info("Powering on robot... This may take a several seconds.")
+                self.robot.logger.info(
+                    "Powering on robot... This may take a several seconds.")
                 self.robot.power_on(timeout_sec=20)
                 assert self.robot.is_powered_on(), "Robot power on failed."
                 self.robot.logger.info("Robot powered on.")
 
                 while not rospy.is_shutdown():
-                    # TODO: Publish
-                    # image_pub.publish() 
+
+                    # Each element in image_response list is an image from each one of the sensors
+                    image_sources = self.image_client.list_image_sources()
+                    image_list = self.image_client.get_image_from_sources(image_sources)
+
+                    for img in enumerate(image_list):
+                        # img[0] is enum, img[1] is image response
+                        header = std_msgs.msg.Header()
+                        header.stamp = rospy.Time.now()
+                        header.frame_id = image_sources[img[0]] # image source identifier
+
+                        i = sensor_msgs.msg.Image()
+                        i.header = header
+                        
+                        i.width = img[1].shot.image.cols
+                        i.height = img[1].shot.image.rows
+                        i.data = img[1].shot.image.data
+
+                        image_pub.publish(i)
+
                     # state_pub.publish()
+                    rospy.logdebug("Looping...")
                     rate.sleep()
 
         finally:
@@ -150,7 +179,6 @@ if __name__ == '__main__':
     options = parser.parse_args(argv[1:])
     try:
         robot = SpotInterface(options)
-        robot.spot_ros_interface()
-        return True
+        robot.start_spot_ros_interface()
     except rospy.ROSInterruptException:
         pass
