@@ -48,6 +48,14 @@ class SpotInterface:
         self.image_client = self.robot.ensure_client(
             ImageClient.default_service_name)
 
+        self.image_source_names = [
+            src.name for src in self.image_client.list_image_sources() if "image" in src.name
+        ]
+
+        self.depth_image_sources = [
+            src.name for src in self.image_client.list_image_sources() if "depth" in src.name
+        ]
+
         # Spot requires a software estop to be activated.
         estop_client = self.robot.ensure_client(
             bosdyn.client.estop.EstopClient.default_service_name)
@@ -61,7 +69,6 @@ class SpotInterface:
         self.lease = self.lease_client.acquire()
 
     # Callback functions
-    # TODO: Should each callback check that inputs are within bounds?
 
     def stand_cb(self, height):
         """Callback that sends stand cmd at a given height delta [m] from standard configuration"""
@@ -95,7 +102,6 @@ class SpotInterface:
             end_time_secs=time.time() + self.VELOCITY_CMD_DURATION
         )
 
-
     def velocity_cb(self, twist):
         """Callback that sends instantaneous velocity [m/s] commands to Spot"""
         # TODO:Twist msg has many fields that do not go unused. Consider changing msg type
@@ -125,13 +131,17 @@ class SpotInterface:
         # Specify topics interface will subscribe to
         # Each subscriber/topic will handle a specific command to Spot instance
 
-        rospy.Subscriber("velocity_cmd", geometry_msgs.msg.Twist, self.velocity_cb)
+        rospy.Subscriber(
+            "velocity_cmd", geometry_msgs.msg.Twist, self.velocity_cb)
         rospy.Subscriber("stand_cmd", std_msgs.msg.Float32, self.stand_cb)
-        rospy.Subscriber("trajectory_cmd", geometry_msgs.msg.Pose, self.trajectory_cb)
+        rospy.Subscriber("trajectory_cmd",
+                         geometry_msgs.msg.Pose, self.trajectory_cb)
 
         # Single image publisher will publish all images from all Spot cameras
         image_pub = rospy.Publisher(
             "image", sensor_msgs.msg.Image, queue_size=20)
+        # depth_image_pub = rospy.Publisher(
+        #     "depth_image", sensor_msgs.msg.Image, queue_size=20) # TODO: Publish depth imgs
         # state_pub = rospy.Publisher("state", ,queue_size=10) # TODO: Publish robot state
 
         try:
@@ -146,18 +156,19 @@ class SpotInterface:
                 while not rospy.is_shutdown():
 
                     # Each element in image_response list is an image from each one of the sensors
-                    image_sources = self.image_client.list_image_sources()
-                    image_list = self.image_client.get_image_from_sources(image_sources)
+                    image_list = self.image_client.get_image_from_sources(
+                        self.image_source_names)
 
                     for img in enumerate(image_list):
                         # img[0] is enum, img[1] is image response
                         header = std_msgs.msg.Header()
                         header.stamp = rospy.Time.now()
-                        header.frame_id = image_sources[img[0]] # image source identifier
+                        # image source identifier
+                        header.frame_id = self.image_source_names[img[0]]
 
                         i = sensor_msgs.msg.Image()
                         i.header = header
-                        
+
                         i.width = img[1].shot.image.cols
                         i.height = img[1].shot.image.rows
                         i.data = img[1].shot.image.data
