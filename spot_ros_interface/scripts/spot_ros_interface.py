@@ -320,7 +320,7 @@ if __name__ == '__main__':
     """Command line interface."""
     parser = argparse.ArgumentParser()
     bosdyn.client.util.add_common_arguments(parser)
-    options = parser.parse_args(argv[1:])
+    options = parser.parse_args(sys.argv[1:])
     try:
         robot = SpotInterface(options)
         robot.start_spot_ros_interface()
