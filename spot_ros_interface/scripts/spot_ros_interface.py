@@ -3,6 +3,7 @@
 import argparse
 import sys
 import time
+import logging
 
 # Bosdyn specific imports
 import bosdyn.client
@@ -29,6 +30,7 @@ class SpotInterface:
 
     # 0.6 s is the standard duration for cmds in boston dynamics Spot examples
     VELOCITY_CMD_DURATION = 0.6  # [seconds]
+    LOGGER = logging.getLogger()
 
     def __init__(self, config):
 
@@ -38,9 +40,12 @@ class SpotInterface:
         self.sdk.load_app_token(config.app_token)
 
         # Create instance of a robot
-        self.robot = self.sdk.create_robot(config.hostname)
-        self.robot.authenticate(config.username, config.password)
-        self.robot.time_sync.wait_for_sync()
+        try:
+            self.robot = self.sdk.create_robot(config.hostname)
+            self.robot.authenticate(config.username, config.password)
+            self.robot.time_sync.wait_for_sync()
+        except bosdyn.client.RpcError as err:
+            self.LOGGER.error("Failed to communicate with robot: %s", err)
 
         # Client to send cmds to Spot
         self.command_client = self.robot.ensure_client(
