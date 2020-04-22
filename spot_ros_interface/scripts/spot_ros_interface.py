@@ -13,13 +13,15 @@ import bosdyn.geometry
 
 from bosdyn.client.image import ImageClient
 from bosdyn.client.robot_command import RobotCommandBuilder, RobotCommandClient
-from bosdyn.api import trajectory_pb2, image_pb2
+from bosdyn.client.robot_state import RobotStateClient
+from bosdyn.api import trajectory_pb2, image_pb2, robot_state_pb2
 
 # ROS specific imports
 import rospy
 import geometry_msgs.msg
 import std_msgs.msg
 import sensor_msgs.msg
+import spot_ros_msgs.msg
 
 
 class SpotInterface:
@@ -55,6 +57,10 @@ class SpotInterface:
         self.depth_image_sources = [
             src.name for src in self.image_client.list_image_sources() if "depth" in src.name
         ]
+
+        # Client to request robot state
+        self.robot_state_client = self.robot.ensure_client(
+            RobotStateClient.default_service_name)
 
         # Spot requires a software estop to be activated.
         estop_client = self.robot.ensure_client(
@@ -122,6 +128,125 @@ class SpotInterface:
         self.robot.logger.info(
             "Robot velocity cmd sent: v_x=${},v_y=${},v_rot${}".format(v_x, v_y, v_rot))
 
+    def get_robot_state(self): # TODO: Unit test the get_state method conversion from pbuf to ROS msg (test reeated fields, etc)
+        ''' Returns tuple of kinematic_state, robot_state
+            kinematic_state:
+                timestamp
+                joint_states []
+                ko_tform_body
+                body_twist_rt_ko
+                ground_plane_rt_ko
+                vo_tform_body
+            robot_state: #TODO
+                power_state
+                battery_states[]
+                comms_states[]
+                system_fault_state
+                estop_states[]
+                behavior_fault_state
+        '''
+        robot_state = self.robot_state_client.get_robot_state()
+        
+        ### PowerState conversion
+        # robot_state.power_state.timestamp #[google.protobuf.Timestamp]
+        # robot_state.power_state.motor_power_state #[enum]
+        # robot_state.power_state.shore_power_state #[enum]
+
+        ### BatteryState conversion [repeated field]
+        # robot_state.battery_states.timestamp #[google.protobuf.Timestamp]
+        # robot_state.battery_states.identifier #[string]
+        # robot_state.battery_states.charge_percentage #[double]
+        # robot_state.battery_states.estimated_runtime #[google.protobuf.Duration]
+        # robot_state.battery_states.current #[Double]
+        # robot_state.battery_states.voltage #[Double]
+        # robot_state.battery_states.temperatures #[repeated - Double]
+        # robot_state.battery_states.status #[enum]
+
+        ### CommsState conversion [repeated field]
+        # robot_state.comms_states.timestamp #[google.protobuf.Timestamp]
+        '''wifi_state is Repeated'''
+        # robot_state.comms_states.wifi_state.current_mode #[enum] Note: wifi_state is oneof
+        # robot_state.comms_states.wifi_state.essid #[string]     
+
+        ### SystemFaultState conversion
+        '''faults is Repeated'''
+        # robot_state.system_fault_state.faults.name #[string]
+        # robot_state.system_fault_state.faults.onset_timestamp #[google.protobuf.Timestamp]
+        # robot_state.system_fault_state.faults.duration #[google.protobuf.Duration]
+        # robot_state.system_fault_state.faults.code #[int32]
+        # robot_state.system_fault_state.faults.uid #[uint64]
+        # robot_state.system_fault_state.faults.error_message #[string]
+        # robot_state.system_fault_state.faults.attributes #[repeated-string]
+        # robot_state.system_fault_state.faults.severity #[enum]
+        '''historical_faults is Repeated'''
+        # robot_state.system_fault_state.historical_faults.name #[string]
+        # robot_state.system_fault_state.historical_faults.onset_timestamp #[google.protobuf.Timestamp]
+        # robot_state.system_fault_state.historical_faults.duration #[google.protobuf.Duration]
+        # robot_state.system_fault_state.historical_faults.code #[int32]
+        # robot_state.system_fault_state.historical_faults.uid #[uint64]
+        # robot_state.system_fault_state.historical_faults.error_message #[string]
+        # robot_state.system_fault_state.historical_faults.attributes #[repeated-string]
+        # robot_state.system_fault_state.historical_faults.severity #[enum]
+
+        # robot_state.system_fault_state.aggregated #[map<string,enum>]
+
+        ### EStopState conversion [repeated field]
+        # robot_state.estop_states.timestamp #[google.protobuf.Timestamp]
+        # robot_state.estop_states.name #[string]
+        # robot_state.estop_states.type #[enum]
+        # robot_state.estop_states.state #[enum]
+        # robot_state.estop_states.state_description #[string]
+
+        ### KinematicState conversion
+        ks_msg = spot_ros_msgs.msg.KinematicState()
+
+        ks_msg.header.stamp = robot_state.kinematic_state.timestamp #[google.protobuf.Timestamp]
+
+        '''joint_states is repeated'''
+        js = sensor_msgs.msg.JointState()
+        for joint_state in robot_state.kinematic_state.joint_states:
+            js.name.append(joint_state.name) #[string]
+            js.position.append(joint_state.position) #[DoubleValue] Note: angle in rad
+            js.velocity.append(joint_state.velocity) #[DoubleValue] Note: ang vel
+            #js.acc(joint_state.acceleration) #[DoubleValue] Note: ang accel. JointState doesn't have accel. Ignoring for now.
+            js.effort.append(joint_state.load) #[DoubleValue] Note: Torque in N-m
+        ks_msg.joint_states = js
+
+        ks_msg.ko_tform_body.translation.x = robot_state.kinematic_state.ko_tform_body.position.x #[double]
+        ks_msg.ko_tform_body.translation.y = robot_state.kinematic_state.ko_tform_body.position.y #[double]
+        ks_msg.ko_tform_body.translation.z = robot_state.kinematic_state.ko_tform_body.position.z #[double]
+        ks_msg.ko_tform_body.rotation.x = robot_state.kinematic_state.ko_tform_body.rotation.x #[double]
+        ks_msg.ko_tform_body.rotation.y = robot_state.kinematic_state.ko_tform_body.rotation.y #[double]
+        ks_msg.ko_tform_body.rotation.z = robot_state.kinematic_state.ko_tform_body.rotation.z #[double]
+        ks_msg.ko_tform_body.rotation.w = robot_state.kinematic_state.ko_tform_body.rotation.w #[double]
+
+        ks_msg.body_twist_rt_ko.linear.x = robot_state.kinematic_state.body_twist_rt_ko.linear.x #[double]
+        ks_msg.body_twist_rt_ko.linear.y = robot_state.kinematic_state.body_twist_rt_ko.linear.y #[double]
+        ks_msg.body_twist_rt_ko.linear.z = robot_state.kinematic_state.body_twist_rt_ko.linear.z #[double]
+        ks_msg.body_twist_rt_ko.angular.x = robot_state.kinematic_state.body_twist_rt_ko.angular.x #[double]
+        ks_msg.body_twist_rt_ko.angular.y = robot_state.kinematic_state.body_twist_rt_ko.angular.y #[double]
+        ks_msg.body_twist_rt_ko.angular.z = robot_state.kinematic_state.body_twist_rt_ko.angular.z #[double]
+
+        #robot_state.kinematic_state.ground_plane_rt_ko.point.x #[Vec3] #Ignoring for now
+        #robot_state.kinematic_state.ground_plane_rt_ko.normal #[Vec3] #Ignoring for now
+
+        ks_msg.vo_tform_body.translation.x = robot_state.kinematic_state.vo_tform_body.position.x #[double]
+        ks_msg.vo_tform_body.translation.y = robot_state.kinematic_state.vo_tform_body.position.y #[double]
+        ks_msg.vo_tform_body.translation.z = robot_state.kinematic_state.vo_tform_body.position.z #[double]
+        ks_msg.vo_tform_body.rotation.x = robot_state.kinematic_state.vo_tform_body.rotation.x #[double]
+        ks_msg.vo_tform_body.rotation.y = robot_state.kinematic_state.vo_tform_body.rotation.y #[double]
+        ks_msg.vo_tform_body.rotation.z = robot_state.kinematic_state.vo_tform_body.rotation.z #[double]
+        ks_msg.vo_tform_body.rotation.w = robot_state.kinematic_state.vo_tform_body.rotation.w #[double]
+
+        ### BehaviourFaultState conversion
+        '''faults is repeated'''
+        # robot_state.behavior_fault_state.faults.behavior_fault_id #[uint32]
+        # robot_state.behavior_fault_state.faults.onset_timestamp #[google.protobuf.Timestamp]
+        # robot_state.behavior_fault_state.faults.cause #[enum]
+        # robot_state.behavior_fault_state.faults.status #[enum]
+
+        return ks_msg, None #TODO: Return robot_state instead of None
+
     def start_spot_ros_interface(self):
 
         # ROS Node initialization
@@ -140,6 +265,9 @@ class SpotInterface:
         # Single image publisher will publish all images from all Spot cameras
         image_pub = rospy.Publisher(
             "image", sensor_msgs.msg.Image, queue_size=20)
+        kinematic_state_pub = rospy.Publisher(
+            "kinematic_state", spot_ros_msgs.msg.KinematicState, queue_size=20)
+        
         # depth_image_pub = rospy.Publisher(
         #     "depth_image", sensor_msgs.msg.Image, queue_size=20) # TODO: Publish depth imgs
         # state_pub = rospy.Publisher("state", ,queue_size=10) # TODO: Publish robot state
@@ -154,7 +282,12 @@ class SpotInterface:
                 self.robot.logger.info("Robot powered on.")
 
                 while not rospy.is_shutdown():
+                    ''' Publish Robot State'''
+                    kinematic_state, robot_state = self.get_robot_state()
+                    kinematic_state_pub.publish(kinematic_state)
+                    # robot_state_pub.publish(robot_state)
 
+                    ''' Publish Images'''
                     # Each element in image_response list is an image from each one of the sensors
                     image_list = self.image_client.get_image_from_sources(
                         self.image_source_names)
