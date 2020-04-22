@@ -1,5 +1,5 @@
 std_msgs/Header header
-sensor_msgs/JointState[] joint_states
+sensor_msgs/JointState joint_states
 geometry_msgs/Transform ko_tform_body
 geometry_msgs/Twist body_twist_rt_ko
 # ground_plane_rt_ko vec3v3c3
