@@ -81,7 +81,7 @@ class SpotInterface:
 
     # Callback functions
 
-    def stand_cb(self, height):
+    def stand_cmd_srv(self, height):
         """Callback that sends stand cmd at a given height delta [m] from standard configuration"""
         # TODO: Pick a msg type that allows for body rotations while standing
 
@@ -91,29 +91,30 @@ class SpotInterface:
         self.robot.logger.info(
             "Robot stand cmd sent. Height: {}".format(height))
 
-    def trajectory_cb(self, pose):
+    def trajectory_cmd_srv(self, trajectory):
         '''Callback that specifies a waypoint (Point) [m] with a final orientation [rad]'''
         # TODO: Allow for an array of waypoints to follow
         # TODO: Pose msg has many fields that do not go unused. Consider changing msg type
         # TODO: Support other reference frames (currently only body ref. frame)
 
-        x = pose.position.x
-        y = pose.position.y
-        # TODO: Convert pose.orientation (quaterion) into EulerZYX (y,p,r)
-        heading = 0
+        for pose in trajectory:
+            x = pose.position.x
+            y = pose.position.y
+            # TODO: Convert pose.orientation (quaterion) into EulerZYX (y,p,r)
+            heading = 0
 
-        cmd = RobotCommandBuilder.trajectory_command(
-            goal_x=x,
-            goal_y=y,
-            goal_heading=heading,
-            frame=trajectory_pb2.bosdyn_dot_api_dot_geometry__pb2.FRAME_BODY,
-        )
-        self.command_client.robot_command_async(
-            cmd,
-            end_time_secs=time.time() + self.VELOCITY_CMD_DURATION
-        )
+            cmd = RobotCommandBuilder.trajectory_command(
+                goal_x=x,
+                goal_y=y,
+                goal_heading=heading,
+                frame=trajectory_pb2.bosdyn_dot_api_dot_geometry__pb2.FRAME_BODY,
+            )
+            self.command_client.robot_command_async(
+                cmd,
+                end_time_secs=time.time() + self.VELOCITY_CMD_DURATION
+            )
 
-    def velocity_cb(self, twist):
+    def velocity_cmd_srv(self, twist):
         """Callback that sends instantaneous velocity [m/s] commands to Spot"""
         # TODO:Twist msg has many fields that do not go unused. Consider changing msg type
 
