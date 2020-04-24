@@ -1,20 +1,28 @@
+		
 # Introduction 
-TODO: Give a short introduction of your project. Let this section explain the objectives or the motivation behind this project. 
+Enable human-robot controls by untrained operators through Mixed Reality Devices & Services.
+
+- Mixed Reality Devices: Build intuitive control of the robot and facilitation of human robot collaboration through HoloLens2 (Gaze, Gesture, Voice) and other mobile Mixed Reality devices, thus enabling humans and robots to work together.
+
+- Mixed Reality Services: Build co-localization and shared environmental understanding capabilities, enabling multi-robot control in a shared coordinate system.
+
+# Overview
+
+The [spot_ros_interface](./spot_ros_interface/README.md) ROS package provides a ROS interface to the Spot API. 
 
 # Getting Started
-TODO: Guide users through getting your code up and running on their own system. In this section you can talk about:
-1.	Installation process
-2.	Software dependencies
-3.	Latest releases
-4.	API references
+## 1.	Installation process
 
+- Set up WSL (Ubuntu 18.04): https://docs.microsoft.com/en-us/windows/wsl/install-win10
+
+- Download and install Spot SDK: https://github.com/boston-dynamics/spot-sdk/blob/master/docs/python/quickstart.md#getting-the-code
+
+- Set up ROS Melodic in WSL #TODO: Expand on this
+
+## 2.	Software dependencies
+## 3.	Latest releases
+## 4.	API references
 # Build and Test
 TODO: Describe and show how to build your code and run the tests. 
-
 # Contribute
-TODO: Explain how other users and developers can contribute to make your code better. 
-
-If you want to learn more about creating good readme files then refer the following [guidelines](https://docs.microsoft.com/en-us/azure/devops/repos/git/create-a-readme?view=azure-devops). You can also seek inspiration from the below readme files:
-- [ASP.NET Core](https://github.com/aspnet/Home)
-- [Visual Studio Code](https://github.com/Microsoft/vscode)
-- [Chakra Core](https://github.com/Microsoft/ChakraCore)
+[ROS package guidelines](https://github.com/ethz-asl/mav_tools_public/wiki/How-to-Write-a-ROS-Package)
