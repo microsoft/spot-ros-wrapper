@@ -87,15 +87,12 @@ class SpotInterface:
 
     ### Callback functions ###
 
-    def stand_cmd_srv(self, height):
+    def stand_cmd_srv(self, stand):
         """Callback that sends stand cmd at a given height delta [m] from standard configuration"""
-        # TODO: Pick a msg type that allows for body rotations while standing
 
-        self.robot.logger.info("Commanding robot to stand...")
-        cmd = RobotCommandBuilder.stand_command(body_height=height)
+        cmd = RobotCommandBuilder.stand_command(body_height=stand.translation.z, footprint_R_body=self.quat_to_euler(stand.rotation))
         self.command_client.robot_command(cmd)
-        self.robot.logger.info(
-            "Robot stand cmd sent. Height: {}".format(height))
+        self.robot.logger.info("Robot stand cmd sent.")
 
     def trajectory_cmd_srv(self, trajectory):
         '''Callback that specifies waypoint(s) (Point) [m] with a final orientation [rad]'''
@@ -126,8 +123,7 @@ class SpotInterface:
 
     def velocity_cmd_srv(self, twist):
         """Callback that sends instantaneous velocity [m/s] commands to Spot"""
-        # TODO:Twist msg has many fields that do not go unused. Consider changing msg type
-
+        
         v_x = twist.linear.x
         v_y = twist.linear.y
         v_rot = twist.angular.z
@@ -344,11 +340,10 @@ class SpotInterface:
         # Each subscriber/topic will handle a specific command to Spot instance
 
         # TODO: Servicify velocity_cmd and stand_cmd
-        # rospy.Service(
-        #     "velocity_cmd", geometry_msgs.msg.Twist, self.velocity_cmd_srv)
-        # rospy.Service("stand_cmd", std_msgs.msg.Float32, self.stand_cmd_srv)
+        rospy.Service("stand_cmd", spot_ros_srvs.srv.Stand, self.stand_cmd_srv)
         rospy.Service("trajectory_cmd",
                       spot_ros_srvs.srv.Trajectory, self.trajectory_cmd_srv)
+        rospy.Service("velocity_cmd", spot_ros_srvs.srv.Velocity, self.velocity_cmd_srv)
 
         # Single image publisher will publish all images from all Spot cameras
         image_pub = rospy.Publisher(
