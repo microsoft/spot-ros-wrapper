@@ -101,8 +101,7 @@ class SpotInterface:
         for pose in trajectory:
             x = pose.position.x
             y = pose.position.y
-            # TODO: Convert pose.orientation (quaterion) into EulerZYX (y,p,r)
-            heading = 0
+            heading = self.quat_to_euler(pose.orientation)[2]
             frame = geometry_pb2.Frame(base_frame=geometry_pb2.FRAME_BODY)
 
             cmd = RobotCommandBuilder.trajectory_command(
@@ -184,7 +183,7 @@ class SpotInterface:
         yaw = math.atan2(2 * q[2] * q[3] + 2 * q[0] * q[1], 1 - 2 * q[1]**2 - 2 * q[2]**2)
         return roll, pitch, yaw
 
-    # TODO: Unit test the get_state method conversion from pbuf to ROS msg (test reeated fields, etc)
+    # TODO: Unit test the get_state method conversion from pbuf to ROS msg (test repeated fields, etc)
     def get_robot_state(self):
         ''' Returns tuple of kinematic_state, robot_state
             kinematic_state:
