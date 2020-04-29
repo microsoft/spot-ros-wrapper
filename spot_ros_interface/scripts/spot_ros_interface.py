@@ -203,12 +203,12 @@ class SpotInterface:
         '''
         robot_state = self.robot_state_client.get_robot_state()
 
-        # PowerState conversion
+        ### PowerState conversion
         # robot_state.power_state.timestamp #[google.protobuf.Timestamp]
         # robot_state.power_state.motor_power_state #[enum]
         # robot_state.power_state.shore_power_state #[enum]
 
-        # BatteryState conversion [repeated field]
+        ### BatteryState conversion [repeated field]
         # robot_state.battery_states.timestamp #[google.protobuf.Timestamp]
         # robot_state.battery_states.identifier #[string]
         # robot_state.battery_states.charge_percentage #[double]
@@ -218,13 +218,13 @@ class SpotInterface:
         # robot_state.battery_states.temperatures #[repeated - Double]
         # robot_state.battery_states.status #[enum]
 
-        # CommsState conversion [repeated field]
+        ### CommsState conversion [repeated field]
         # robot_state.comms_states.timestamp #[google.protobuf.Timestamp]
         '''wifi_state is Repeated'''
         # robot_state.comms_states.wifi_state.current_mode #[enum] Note: wifi_state is oneof
         # robot_state.comms_states.wifi_state.essid #[string]
 
-        # SystemFaultState conversion
+        ### SystemFaultState conversion
         '''faults is Repeated'''
         # robot_state.system_fault_state.faults.name #[string]
         # robot_state.system_fault_state.faults.onset_timestamp #[google.protobuf.Timestamp]
@@ -246,14 +246,14 @@ class SpotInterface:
 
         # robot_state.system_fault_state.aggregated #[map<string,enum>]
 
-        # EStopState conversion [repeated field]
+        ### EStopState conversion [repeated field]
         # robot_state.estop_states.timestamp #[google.protobuf.Timestamp]
         # robot_state.estop_states.name #[string]
         # robot_state.estop_states.type #[enum]
         # robot_state.estop_states.state #[enum]
         # robot_state.estop_states.state_description #[string]
 
-        # KinematicState conversion
+        ### KinematicState conversion
         ks_msg = spot_ros_msgs.msg.KinematicState()
 
         # [google.protobuf.Timestamp]
@@ -320,7 +320,7 @@ class SpotInterface:
         # [double]
         ks_msg.vo_tform_body.rotation.w = robot_state.kinematic_state.vo_tform_body.rotation.w
 
-        # BehaviourFaultState conversion
+        ### BehaviourFaultState conversion
         '''faults is repeated'''
         # robot_state.behavior_fault_state.faults.behavior_fault_id #[uint32]
         # robot_state.behavior_fault_state.faults.onset_timestamp #[google.protobuf.Timestamp]
@@ -335,10 +335,7 @@ class SpotInterface:
         rospy.init_node('spot_ros_interface_py')
         rate = rospy.Rate(10)  # Update at 10hz
 
-        # Specify topics interface will subscribe to
-        # Each subscriber/topic will handle a specific command to Spot instance
-
-        # TODO: Servicify velocity_cmd and stand_cmd
+        # Each service will handle a specific command to Spot instance
         rospy.Service("stand_cmd", spot_ros_srvs.srv.Stand, self.stand_cmd_srv)
         rospy.Service("trajectory_cmd",
                       spot_ros_srvs.srv.Trajectory, self.trajectory_cmd_srv)
