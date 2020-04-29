@@ -377,16 +377,17 @@ class SpotInterface:
                     for img in enumerate(image_list):
                         # img[0] is enum, img[1] is image response
                         header = std_msgs.msg.Header()
-                        header.stamp = rospy.Time.now()
-                        # image source identifier
-                        header.frame_id = self.image_source_names[img[0]]
+                        header.stamp = img[1].shot.sample.acquisition_time
+                        header.frame_id = img[1].source.name
 
                         i = sensor_msgs.msg.Image()
                         i.header = header
-
                         i.width = img[1].shot.image.cols
                         i.height = img[1].shot.image.rows
                         i.data = img[1].shot.image.data
+
+                        ko_tform_body = geometry_msgs.msg.Transform()
+                        
 
                         image_pub.publish(i)
 
