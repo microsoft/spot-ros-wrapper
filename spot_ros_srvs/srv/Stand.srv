@@ -1,0 +1,2 @@
+geometry_msgs/Transform body_pose # Only the z-component of translation will be taken into account
+---
