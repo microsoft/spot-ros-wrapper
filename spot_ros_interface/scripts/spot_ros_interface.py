@@ -343,7 +343,7 @@ class SpotInterface:
 
         # Single image publisher will publish all images from all Spot cameras
         image_pub = rospy.Publisher(
-            "image", sensor_msgs.msg.Image, queue_size=20)
+            "image_capture", spot_ros_msgs.msg.ImageCapture, queue_size=20)
         kinematic_state_pub = rospy.Publisher(
             "kinematic_state", spot_ros_msgs.msg.KinematicState, queue_size=20)
 
@@ -371,21 +371,31 @@ class SpotInterface:
                     image_list = self.image_client.get_image_from_sources(
                         self.image_source_names)
 
-                    for img in enumerate(image_list):
-                        # img[0] is enum, img[1] is image response
-                        header = std_msgs.msg.Header()
-                        header.stamp = rospy.Time.now()
-                        # image source identifier
-                        header.frame_id = self.image_source_names[img[0]]
+                    for img in image_list:
+                        if not img.status == image_pb2.ImageResponse.STATUS_OK:
 
-                        i = sensor_msgs.msg.Image()
-                        i.header = header
+                            header = std_msgs.msg.Header()
+                            header.stamp = img.shot.sample.acquisition_time
+                            header.frame_id = img.source.name
 
-                        i.width = img[1].shot.image.cols
-                        i.height = img[1].shot.image.rows
-                        i.data = img[1].shot.image.data
+                            # Make Image component of ImageCapture
+                            i = sensor_msgs.msg.Image()
+                            i.header = header
+                            i.width = img.shot.image.cols
+                            i.height = img.shot.image.rows
+                            i.data = img.shot.image.data
+                            
+                            # Make Transform component of ImageCapture
+                            ko_tform_body = geometry_msgs.msg.Transform()
+                            ko_tform_body.translation = img.ko_tform_body.position
+                            ko_tform_body.rotation = img.ko_tform_body.rotation
+                            
+                            # Populate ImageCapture msg
+                            image_capture = spot_ros_msgs.msg.ImageCapture()
+                            image_capture.image = i
+                            image_capture.ko_tform_body = ko_tform_body
 
-                        image_pub.publish(i)
+                            image_pub.publish(image_capture)
 
                     # state_pub.publish()
                     rospy.logdebug("Looping...")
