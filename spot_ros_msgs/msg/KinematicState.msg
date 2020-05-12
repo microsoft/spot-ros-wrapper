@@ -1,6 +1,6 @@
 std_msgs/Header header
 sensor_msgs/JointState joint_states
-geometry_msgs/Transform ko_tform_body
-geometry_msgs/Twist body_twist_rt_ko
-# ground_plane_rt_ko vec3v3c3
-geometry_msgs/Transform vo_tform_body
+geometry_msgs/Transform vision_tform_body
+geometry_msgs/Transform odom_tform_body
+geometry_msgs/Twist velocity_of_body_in_vision
+geometry_msgs/Twist velocity_of_body_in_odom

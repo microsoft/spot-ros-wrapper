@@ -16,7 +16,9 @@ import bosdyn.geometry
 from bosdyn.client.image import ImageClient
 from bosdyn.client.robot_command import RobotCommandBuilder, RobotCommandClient
 from bosdyn.client.robot_state import RobotStateClient
-from bosdyn.api import trajectory_pb2, image_pb2, robot_state_pb2, geometry_pb2
+from bosdyn.api import trajectory_pb2, image_pb2, robot_state_pb2
+
+from bosdyn.client.frame_helpers import get_a_tform_b, get_vision_tform_body, BODY_FRAME_NAME, VISION_FRAME_NAME
 
 # ROS specific imports
 import rospy
@@ -257,7 +259,7 @@ class SpotInterface:
         ks_msg = spot_ros_msgs.msg.KinematicState()
 
         # [google.protobuf.Timestamp]
-        ks_msg.header.stamp = robot_state.kinematic_state.timestamp
+        ks_msg.header.stamp = robot_state.kinematic_state.acquisition_timestamp
 
         '''joint_states is repeated'''
         js = sensor_msgs.msg.JointState()
@@ -274,51 +276,72 @@ class SpotInterface:
             js.effort.append(joint_state.load)
         ks_msg.joint_states = js
 
-        # [double]
-        ks_msg.ko_tform_body.translation.x = robot_state.kinematic_state.ko_tform_body.position.x
-        # [double]
-        ks_msg.ko_tform_body.translation.y = robot_state.kinematic_state.ko_tform_body.position.y
-        # [double]
-        ks_msg.ko_tform_body.translation.z = robot_state.kinematic_state.ko_tform_body.position.z
-        # [double]
-        ks_msg.ko_tform_body.rotation.x = robot_state.kinematic_state.ko_tform_body.rotation.x
-        # [double]
-        ks_msg.ko_tform_body.rotation.y = robot_state.kinematic_state.ko_tform_body.rotation.y
-        # [double]
-        ks_msg.ko_tform_body.rotation.z = robot_state.kinematic_state.ko_tform_body.rotation.z
-        # [double]
-        ks_msg.ko_tform_body.rotation.w = robot_state.kinematic_state.ko_tform_body.rotation.w
+        ''' vision_tform_body'''
+        # SE3Pose representing transform of Spot's Body frame relative to the inertial Vision frame
+        vision_tform_body = get_vision_tform_body(robot_state.kinematic_state.transforms_snapshot)
 
         # [double]
-        ks_msg.body_twist_rt_ko.linear.x = robot_state.kinematic_state.body_twist_rt_ko.linear.x
+        ks_msg.vision_tform_body.translation.x = vision_tform_body.x
         # [double]
-        ks_msg.body_twist_rt_ko.linear.y = robot_state.kinematic_state.body_twist_rt_ko.linear.y
+        ks_msg.vision_tform_body.translation.y = vision_tform_body.y
         # [double]
-        ks_msg.body_twist_rt_ko.linear.z = robot_state.kinematic_state.body_twist_rt_ko.linear.z
+        ks_msg.vision_tform_body.translation.z = vision_tform_body.z
         # [double]
-        ks_msg.body_twist_rt_ko.angular.x = robot_state.kinematic_state.body_twist_rt_ko.angular.x
+        ks_msg.vision_tform_body.rotation.x = vision_tform_body.rot.x
         # [double]
-        ks_msg.body_twist_rt_ko.angular.y = robot_state.kinematic_state.body_twist_rt_ko.angular.y
+        ks_msg.vision_tform_body.rotation.y = vision_tform_body.rot.y
         # [double]
-        ks_msg.body_twist_rt_ko.angular.z = robot_state.kinematic_state.body_twist_rt_ko.angular.z
+        ks_msg.vision_tform_body.rotation.z = vision_tform_body.rot.z
+        # [double]
+        ks_msg.vision_tform_body.rotation.w = vision_tform_body.rot.w
 
-        # robot_state.kinematic_state.ground_plane_rt_ko.point.x #[Vec3] #Ignoring for now
-        # robot_state.kinematic_state.ground_plane_rt_ko.normal #[Vec3] #Ignoring for now
+        ''' odom_tform_body '''
+        # SE3Pose representing transform of Spot's Body frame relative to the inertial Vision frame
+        odom_tform_body = get_odom_tform_body(robot_state.kinematic_state.transforms_snapshot)
 
         # [double]
-        ks_msg.vo_tform_body.translation.x = robot_state.kinematic_state.vo_tform_body.position.x
+        ks_msg.odom_tform_body.translation.x = odom_tform_body.x
         # [double]
-        ks_msg.vo_tform_body.translation.y = robot_state.kinematic_state.vo_tform_body.position.y
+        ks_msg.odom_tform_body.translation.y = odom_tform_body.y
         # [double]
-        ks_msg.vo_tform_body.translation.z = robot_state.kinematic_state.vo_tform_body.position.z
+        ks_msg.odom_tform_body.translation.z = odom_tform_body.z
         # [double]
-        ks_msg.vo_tform_body.rotation.x = robot_state.kinematic_state.vo_tform_body.rotation.x
+        ks_msg.odom_tform_body.rotation.x = odom_tform_body.rot.x
         # [double]
-        ks_msg.vo_tform_body.rotation.y = robot_state.kinematic_state.vo_tform_body.rotation.y
+        ks_msg.odom_tform_body.rotation.y = odom_tform_body.rot.y
         # [double]
-        ks_msg.vo_tform_body.rotation.z = robot_state.kinematic_state.vo_tform_body.rotation.z
+        ks_msg.odom_tform_body.rotation.z = odom_tform_body.rot.z
         # [double]
-        ks_msg.vo_tform_body.rotation.w = robot_state.kinematic_state.vo_tform_body.rotation.w
+        ks_msg.odom_tform_body.rotation.w = odom_tform_body.rot.w
+
+        ''' velocity_of_body_in_vision '''
+        # [double]
+        ks_msg.velocity_of_body_in_vision.linear.x = robot_state.kinematic_state.velocity_of_body_in_vision.linear.x
+        # [double]
+        ks_msg.velocity_of_body_in_vision.linear.y = robot_state.kinematic_state.velocity_of_body_in_vision.linear.y
+        # [double]
+        ks_msg.velocity_of_body_in_vision.linear.z = robot_state.kinematic_state.velocity_of_body_in_vision.linear.z
+        # [double]
+        ks_msg.velocity_of_body_in_vision.angular.x = robot_state.kinematic_state.velocity_of_body_in_vision.angular.x
+        # [double]
+        ks_msg.velocity_of_body_in_vision.angular.y = robot_state.kinematic_state.velocity_of_body_in_vision.angular.y
+        # [double]
+        ks_msg.velocity_of_body_in_vision.angular.z = robot_state.kinematic_state.velocity_of_body_in_vision.angular.z
+
+        ''' velocity_of_body_in_odom '''
+        # [double]
+        ks_msg.velocity_of_body_in_odom.linear.x = robot_state.kinematic_state.velocity_of_body_in_odom.linear.x
+        # [double]
+        ks_msg.velocity_of_body_in_odom.linear.y = robot_state.kinematic_state.velocity_of_body_in_odom.linear.y
+        # [double]
+        ks_msg.velocity_of_body_in_odom.linear.z = robot_state.kinematic_state.velocity_of_body_in_odom.linear.z
+        # [double]
+        ks_msg.velocity_of_body_in_odom.angular.x = robot_state.kinematic_state.velocity_of_body_in_odom.angular.x
+        # [double]
+        ks_msg.velocity_of_body_in_odom.angular.y = robot_state.kinematic_state.velocity_of_body_in_odom.angular.y
+        # [double]
+        ks_msg.velocity_of_body_in_odom.angular.z = robot_state.kinematic_state.velocity_of_body_in_odom.angular.z
+
 
         ### BehaviourFaultState conversion
         '''faults is repeated'''
