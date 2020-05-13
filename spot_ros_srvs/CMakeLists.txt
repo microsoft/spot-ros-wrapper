@@ -29,3 +29,7 @@ generate_messages(
 include_directories(
   ${catkin_INCLUDE_DIRS}
 )
+
+catkin_package(
+  CATKIN_DEPENDS message_runtime std_msgs geometry_msgs sensor_msgs spot_ros_msgs
+)

@@ -6,3 +6,5 @@ find_package(catkin REQUIRED COMPONENTS rospy std_msgs genmsg spot_ros_msgs)
 
 ## Declare a catkin package
 catkin_package()
+
+catkin_python_setup()
