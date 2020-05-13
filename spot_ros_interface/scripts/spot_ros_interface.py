@@ -368,7 +368,7 @@ class SpotInterface:
         ks_msg.velocity_of_body_in_odom.angular.z = robot_state.kinematic_state.velocity_of_body_in_odom.angular.z
 
 
-        ### BehaviourFaultState conversion
+        ### BehaviorFaultState conversion
         '''faults is repeated'''
         # robot_state.behavior_fault_state.faults.behavior_fault_id #[uint32]
         # robot_state.behavior_fault_state.faults.onset_timestamp #[google.protobuf.Timestamp]
