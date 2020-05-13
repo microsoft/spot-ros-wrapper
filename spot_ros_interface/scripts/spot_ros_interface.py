@@ -18,7 +18,8 @@ from bosdyn.client.robot_command import RobotCommandBuilder, RobotCommandClient
 from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.api import trajectory_pb2, image_pb2, robot_state_pb2
 
-from bosdyn.client.frame_helpers import get_a_tform_b, get_vision_tform_body, BODY_FRAME_NAME, VISION_FRAME_NAME
+from bosdyn.client.frame_helpers import get_a_tform_b, get_vision_tform_body, get_odom_tform_body,\
+    BODY_FRAME_NAME, GRAV_ALIGNED_BODY_FRAME_NAME, VISION_FRAME_NAME, ODOM_FRAME_NAME 
 
 # ROS specific imports
 import rospy
@@ -97,14 +98,20 @@ class SpotInterface:
         self.robot.logger.info("Robot stand cmd sent.")
 
     def trajectory_cmd_srv(self, trajectory):
-        '''Callback that specifies waypoint(s) (Point) [m] with a final orientation [rad]'''
+        '''
+        Callback that specifies waypoint(s) (Point) [m] with a final orientation [rad]
+
+        The name of the frame that trajectory is relative to.
+        The trajectory must be expressed in a gravity aligned frame, so either "vision", "odom", or "flat_body".
+        Any other provided se2_frame_name will be rejected and the trajectory command will not be exectuted.
+        '''
         # TODO: Support other reference frames (currently only body ref. frame)
 
         for pose in trajectory:
             x = pose.position.x
             y = pose.position.y
             heading = self.quat_to_euler(pose.orientation)[2]
-            frame = geometry_pb2.Frame(base_frame=geometry_pb2.FRAME_BODY)
+            frame = GRAV_ALIGNED_BODY_FRAME_NAME
 
             cmd = RobotCommandBuilder.trajectory_command(
                 goal_x=x,
@@ -204,21 +211,35 @@ class SpotInterface:
                 behavior_fault_state
         '''
         robot_state = self.robot_state_client.get_robot_state()
+        rs_msg = spot_ros_msgs.msg.RobotState()
 
         ### PowerState conversion
         # robot_state.power_state.timestamp #[google.protobuf.Timestamp]
         # robot_state.power_state.motor_power_state #[enum]
         # robot_state.power_state.shore_power_state #[enum]
 
-        ### BatteryState conversion [repeated field]
-        # robot_state.battery_states.timestamp #[google.protobuf.Timestamp]
-        # robot_state.battery_states.identifier #[string]
-        # robot_state.battery_states.charge_percentage #[double]
-        # robot_state.battery_states.estimated_runtime #[google.protobuf.Duration]
-        # robot_state.battery_states.current #[Double]
-        # robot_state.battery_states.voltage #[Double]
-        # robot_state.battery_states.temperatures #[repeated - Double]
-        # robot_state.battery_states.status #[enum]
+        ### BatteryState conversion [repeated field] 
+        for battery_state in robot_state.battery_states:
+            battery_state_msg = sensor_msgs.msg.BatteryState()
+
+            header = std_msgs.msg.Header()
+            #[google.protobuf.Timestamp]
+            header.stamp.secs = battery_state.timestamp.seconds
+            header.stamp.nsecs = battery_state.timestamp.nanos
+            header.frame_id = battery_state.identifier #[string]
+
+            battery_state_msg.header = header
+
+            battery_state_msg.percentage = battery_state.charge_percentage/100 #[double]
+            # NOTE: Using battery_state_msg.charge as the estimated runtime in sec
+            battery_state_msg.charge = battery_state.estimated_runtime.secons #[google.protobuf.Duration]
+            battery_state_msg.current = battery_state.current #[Double]
+            battery_state_msg.voltage = battery_state.voltage #[Double]
+            # NOTE: Ignoring temperatures for now; no field in BatteryState maps directly to it
+            # battery_state_msg. = battery_state.temperatures #[repeated - Double]
+            battery_state_msg.power_supply_status = battery_state.status #[enum]
+
+            rs_msg.battery_state.append(battery_state_msg)
 
         ### CommsState conversion [repeated field]
         # robot_state.comms_states.timestamp #[google.protobuf.Timestamp]
@@ -260,6 +281,8 @@ class SpotInterface:
 
         # [google.protobuf.Timestamp]
         ks_msg.header.stamp = robot_state.kinematic_state.acquisition_timestamp
+        header.stamp.secs = robot_state.kinematic_state.acquisition_timestamp.seconds
+        header.stamp.nsecs = robot_state.kinematic_state.acquisition_timestamp.nanos
 
         '''joint_states is repeated'''
         js = sensor_msgs.msg.JointState()
@@ -398,7 +421,8 @@ class SpotInterface:
                         if not img.status == image_pb2.ImageResponse.STATUS_OK:
 
                             header = std_msgs.msg.Header()
-                            header.stamp = img.shot.sample.acquisition_time
+                            header.stamp.secs = img.shot.sample.acquisition_time.seconds
+                            header.stamp.nsecs = img.shot.sample.acquisition_time.nanos
                             header.frame_id = img.source.name
 
                             # Make Image component of ImageCapture
