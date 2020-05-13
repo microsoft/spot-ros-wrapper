@@ -217,6 +217,8 @@ class SpotInterface:
         # robot_state.power_state.timestamp #[google.protobuf.Timestamp]
         # robot_state.power_state.motor_power_state #[enum]
         # robot_state.power_state.shore_power_state #[enum]
+        # robot_state.power_state.locomotion_charge_percentage #[google.protobuf.DoubleValue]
+        # robot_state.power_state.locomotion_estimated_runtime #[google.protobuf.Duration]
 
         ### BatteryState conversion [repeated field] 
         for battery_state in robot_state.battery_states:
@@ -372,6 +374,11 @@ class SpotInterface:
         # robot_state.behavior_fault_state.faults.onset_timestamp #[google.protobuf.Timestamp]
         # robot_state.behavior_fault_state.faults.cause #[enum]
         # robot_state.behavior_fault_state.faults.status #[enum]
+
+        ### FootState conversion [repeated]
+        robot_state.foot_state.foot_position_rt_body #[Vec3]
+        robot_state.foot_state.contact #[enum]
+        
 
         return ks_msg, None  # TODO: Return robot_state instead of None
 
