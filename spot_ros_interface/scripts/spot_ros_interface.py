@@ -212,13 +212,15 @@ class SpotInterface:
         '''
         robot_state = self.robot_state_client.get_robot_state()
         rs_msg = spot_ros_msgs.msg.RobotState()
-
+        
         ### PowerState conversion
-        # robot_state.power_state.timestamp #[google.protobuf.Timestamp]
-        # robot_state.power_state.motor_power_state #[enum]
-        # robot_state.power_state.shore_power_state #[enum]
-        # robot_state.power_state.locomotion_charge_percentage #[google.protobuf.DoubleValue]
-        # robot_state.power_state.locomotion_estimated_runtime #[google.protobuf.Duration]
+        #[google.protobuf.Timestamp]
+        rs_msg.power_state.header.stamp.secs =  robot_state.power_state.timestamp.seconds
+        rs_msg.power_state.header.stamp.nsecs =  robot_state.power_state.timestamp.nanos
+        rs_msg.power_state.motor_power_state = robot_state.power_state.motor_power_state #[enum]
+        rs_msg.power_state.shore_power_state = robot_state.power_state.shore_power_state #[enum]
+        rs_msg.power_state.locomotion_charge_percentage = robot_state.power_state.locomotion_charge_percentage #[google.protobuf.DoubleValue]
+        rs_msg.power_state.locomotion_estimated_runtime = robot_state.power_state.locomotion_estimated_runtime #[google.protobuf.Duration]
 
         ### BatteryState conversion [repeated field] 
         for battery_state in robot_state.battery_states:
@@ -244,39 +246,67 @@ class SpotInterface:
             rs_msg.battery_state.append(battery_state_msg)
 
         ### CommsState conversion [repeated field]
-        # robot_state.comms_states.timestamp #[google.protobuf.Timestamp]
-        '''wifi_state is Repeated'''
-        # robot_state.comms_states.wifi_state.current_mode #[enum] Note: wifi_state is oneof
-        # robot_state.comms_states.wifi_state.essid #[string]
+        for comms_state in robot_state.comms_states:
+            comms_state_msg = spot_ros_msgs.msg.CommsState()
+
+            comms_state_msg.header.stamp.secs = robot_state.comms_states.timestamp.seconds #[google.protobuf.Timestamp]
+            comms_state_msg.header.stamp.nsecs = robot_state.comms_states.timestamp.nanos #[google.protobuf.Timestamp]
+            comms_state_msg.wifi_mode = robot_state.comms_states.wifi_state.current_mode #[enum] Note: wifi_state is oneof
+            comms_state_msg.essid = robot_state.comms_states.wifi_state.essid #[string]
+
+            rs_msg.comms_states.append(comms_state_msg)
 
         ### SystemFaultState conversion
         '''faults is Repeated'''
-        # robot_state.system_fault_state.faults.name #[string]
-        # robot_state.system_fault_state.faults.onset_timestamp #[google.protobuf.Timestamp]
-        # robot_state.system_fault_state.faults.duration #[google.protobuf.Duration]
-        # robot_state.system_fault_state.faults.code #[int32]
-        # robot_state.system_fault_state.faults.uid #[uint64]
-        # robot_state.system_fault_state.faults.error_message #[string]
-        # robot_state.system_fault_state.faults.attributes #[repeated-string]
-        # robot_state.system_fault_state.faults.severity #[enum]
-        '''historical_faults is Repeated'''
-        # robot_state.system_fault_state.historical_faults.name #[string]
-        # robot_state.system_fault_state.historical_faults.onset_timestamp #[google.protobuf.Timestamp]
-        # robot_state.system_fault_state.historical_faults.duration #[google.protobuf.Duration]
-        # robot_state.system_fault_state.historical_faults.code #[int32]
-        # robot_state.system_fault_state.historical_faults.uid #[uint64]
-        # robot_state.system_fault_state.historical_faults.error_message #[string]
-        # robot_state.system_fault_state.historical_faults.attributes #[repeated-string]
-        # robot_state.system_fault_state.historical_faults.severity #[enum]
+        for fault in robot_state.system_fault_state.faults:
+            system_fault_msg = spot_ros_msgs.msg.SystemFault()
 
-        # robot_state.system_fault_state.aggregated #[map<string,enum>]
+            system_fault_msg.header.frame_id = fault.name #[string]
+            system_fault_msg.header.stamp.secs = fault.onset_timestamp.seconds #[google.protobuf.Timestamp]
+            system_fault_msg.header.stamp.nsecs = fault.onset_timestamp.nanos #[google.protobuf.Timestamp]
+            system_fault_msg.duration.secs = fault.duration.seconds #[google.protobuf.Duration]
+            system_fault_msg.duration.nsecs = fault.duration.nanos #[google.protobuf.Duration]
+            system_fault_msg.code = fault.code #[int32]
+            system_fault_msg.uid =  fault.uid #[uint64]
+            system_fault_msg.error_message = fault.error_message #[string]
+            system_fault_msg.attributes = fault.attributes #[repeated-string]
+            system_fault_msg.severity = fault.severity #[enum]
+
+            rs_msg.system_fault_state.faults.append(system_fault_msg)
+
+        '''historical_faults is Repeated'''
+        for historical_fault in robot_state.system_fault_state.faults:
+            system_fault_msg = spot_ros_msgs.msg.SystemFault()
+
+            system_fault_msg.header.frame_id = historical_fault.name #[string]
+            system_fault_msg.header.stamp.secs = historical_fault.onset_timestamp.seconds #[google.protobuf.Timestamp]
+            system_fault_msg.header.stamp.nsecs = historical_fault.onset_timestamp.nanos #[google.protobuf.Timestamp]
+            system_fault_msg.duration.secs = historical_fault.duration.seconds #[google.protobuf.Duration]
+            system_fault_msg.duration.nsecs = historical_fault.duration.nanos #[google.protobuf.Duration]
+            system_fault_msg.code = historical_fault.code #[int32]
+            system_fault_msg.uid =  historical_fault.uid #[uint64]
+            system_fault_msg.error_message = historical_fault.error_message #[string]
+            system_fault_msg.attributes = historical_fault.attributes #[repeated-string]
+            system_fault_msg.severity = historical_fault.severity #[enum]
+
+            rs_msg.system_fault_state.historical_faults.append(system_fault_msg)
+
+        #[map<string,enum>]
+        rs_msg.system_fault_state.aggregated.key = robot_state.system_fault_state.aggregated.key
+        rs_msg.system_fault_state.aggregated.value = robot_state.system_fault_state.aggregated.value
 
         ### EStopState conversion [repeated field]
-        # robot_state.estop_states.timestamp #[google.protobuf.Timestamp]
-        # robot_state.estop_states.name #[string]
-        # robot_state.estop_states.type #[enum]
-        # robot_state.estop_states.state #[enum]
-        # robot_state.estop_states.state_description #[string]
+        for estop_state in robot_state.estop_states:
+            estop_msg = spot_ros_msgs.msg.EStopState()
+
+            estop_msg.header.stamp.secs = estop_state.timestamp.seconds #[google.protobuf.Timestamp]
+            estop_msg.header.stamp.nsecs = estop_state.timestamp.nanos #[google.protobuf.Timestamp]
+            estop_msg.header.frame_id = estop_state.name #[string]
+            estop_msg.type = estop_state.type #[enum]
+            estop_msg.state = estop_state.state #[enum]
+            estop_msg.state_description = estop_state.state_description #[string]
+
+            rs_msg.estop_states.append(estop_msg)
 
         ### KinematicState conversion
         ks_msg = spot_ros_msgs.msg.KinematicState()
@@ -370,17 +400,30 @@ class SpotInterface:
 
         ### BehaviorFaultState conversion
         '''faults is repeated'''
-        # robot_state.behavior_fault_state.faults.behavior_fault_id #[uint32]
-        # robot_state.behavior_fault_state.faults.onset_timestamp #[google.protobuf.Timestamp]
-        # robot_state.behavior_fault_state.faults.cause #[enum]
-        # robot_state.behavior_fault_state.faults.status #[enum]
+        for fault in robot_state.behavior_fault_state.faults:
+            behaviour_fault_state_msg = spot_ros_msgs.msg.BehaviorFaultState()
+
+            behaviour_fault_state_msg.header.frame_id = fault.behavior_fault_id #[uint32]
+            behaviour_fault_state_msg.header.stamp.secs = fault.onset_timestamp.seconds #[google.protobuf.Timestamp]
+            behaviour_fault_state_msg.header.stamp.nsecs = fault.onset_timestamp.nanos #[google.protobuf.Timestamp]
+            behaviour_fault_state_msg.cause = fault.cause #[enum]
+            behaviour_fault_state_msg.status = fault.status #[enum]
+
+            rs_msg.behavior_fault_states.append(behaviour_fault_state_msg)
 
         ### FootState conversion [repeated]
-        robot_state.foot_state.foot_position_rt_body #[Vec3]
-        robot_state.foot_state.contact #[enum]
+        for foot_state in robot_state.foot_state:
+            foot_state_msg = sensor_msgs.msg.FootState()
+
+            foot_state_msg.foot_position_rt_body.x = foot_state.foot_position_rt_body.x #[Vec3]
+            foot_state_msg.foot_position_rt_body.y = foot_state.foot_position_rt_body.y #[Vec3]
+            foot_state_msg.foot_position_rt_body.z = foot_state.foot_position_rt_body.z #[Vec3]
+            foot_state_msg.contact = rs_foot_state.contact #[enum]
+
+            rs_msg.foot_states.append(foot_state_msg)
         
 
-        return ks_msg, None  # TODO: Return robot_state instead of None
+        return ks_msg, rs_msg  #kinematic_state, robot_state
 
     def start_spot_ros_interface(self):
 
