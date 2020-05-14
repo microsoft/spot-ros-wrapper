@@ -6,6 +6,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   sensor_msgs
   message_generation
+  diagnostic_msgs
   spot_ros_msgs
 )
 
@@ -23,9 +24,14 @@ generate_messages(
   std_msgs
   geometry_msgs
   sensor_msgs
+  diagnostic_msgs
   spot_ros_msgs
 )
 
 include_directories(
   ${catkin_INCLUDE_DIRS}
+)
+
+catkin_package(
+  CATKIN_DEPENDS message_runtime std_msgs geometry_msgs sensor_msgs spot_ros_msgs
 )
