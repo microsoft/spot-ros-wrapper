@@ -88,6 +88,9 @@ class SpotInterface:
             bosdyn.client.lease.LeaseClient.default_service_name)
         self.lease = self.lease_client.acquire()
 
+        # True for RViz visualization of Spot in 3rd person with occupancy grid
+        self.third_person_view = True
+
     ### Callback functions ###
 
     def stand_cmd_srv(self, stand):
@@ -445,6 +448,11 @@ class SpotInterface:
         robot_state_pub = rospy.Publisher(
             "robot_state", spot_ros_msgs.msg.RobotState, queue_size=20)
 
+        # For RViz 3rd person POV visualization
+        if self.third_person_view:
+            joint_state_pub = rospy.Publisher(
+                "joint_state_from_spot", sensor_msgs.msg.JointState, queue_size=20)
+
         # depth_image_pub = rospy.Publisher(
         #     "depth_image", sensor_msgs.msg.Image, queue_size=20) # TODO: Publish depth imgs
         # state_pub = rospy.Publisher("state", ,queue_size=10) # TODO: Publish robot state
@@ -463,6 +471,9 @@ class SpotInterface:
                     kinematic_state, robot_state = self.get_robot_state()
                     kinematic_state_pub.publish(kinematic_state)
                     robot_state_pub.publish(robot_state)
+
+                    if self.third_person_view:
+                        joint_state_pub.publish(kinematic_state.joint_states)
 
                     ''' Publish Images'''
                     # Each element in image_response list is an image from each one of the sensors
