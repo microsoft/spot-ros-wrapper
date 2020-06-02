@@ -202,7 +202,7 @@ class SpotInterface:
                 body_twist_rt_ko
                 ground_plane_rt_ko
                 vo_tform_body
-            robot_state: #TODO
+            robot_state:
                 power_state
                 battery_states[]
                 comms_states[]
@@ -442,6 +442,8 @@ class SpotInterface:
             "image_capture", spot_ros_msgs.msg.ImageCapture, queue_size=20)
         kinematic_state_pub = rospy.Publisher(
             "kinematic_state", spot_ros_msgs.msg.KinematicState, queue_size=20)
+        robot_state_pub = rospy.Publisher(
+            "robot_state", spot_ros_msgs.msg.RobotState, queue_size=20)
 
         # depth_image_pub = rospy.Publisher(
         #     "depth_image", sensor_msgs.msg.Image, queue_size=20) # TODO: Publish depth imgs
@@ -460,7 +462,7 @@ class SpotInterface:
                     ''' Publish Robot State'''
                     kinematic_state, robot_state = self.get_robot_state()
                     kinematic_state_pub.publish(kinematic_state)
-                    # robot_state_pub.publish(robot_state)
+                    robot_state_pub.publish(robot_state)
 
                     ''' Publish Images'''
                     # Each element in image_response list is an image from each one of the sensors
