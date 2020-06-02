@@ -32,17 +32,17 @@ while not rospy.is_shutdown():
 
     js.position = [
         0.0 ,
-        0 + 0.5*math.cos(time.time()-start_time),
-        -math.pi/2. + math.pi/6+ 0.5*math.cos(time.time()-start_time),
+        0 + 0.5*math.cos((time.time()-start_time)%(2*math.pi)),
+        -math.pi/2. + math.pi/6+ 0.5*math.cos((time.time()-start_time)%(2*math.pi)),
         0.0,
-        0 + 0.5*math.sin(time.time()-start_time),
-        -math.pi/2. + math.pi/6+ 0.5*math.sin(time.time()-start_time),
+        0 + 0.5*math.sin((time.time()-start_time)%(2*math.pi)),
+        -math.pi/2. + math.pi/6+ 0.5*math.sin((time.time()-start_time)%(2*math.pi)),
         0.0,
-        0 + 0.5*math.sin(time.time()-start_time),
-        -math.pi/2. + math.pi/6+ 0.5*math.sin(time.time()-start_time),
+        0 + 0.5*math.sin((time.time()-start_time)%(2*math.pi)),
+        -math.pi/2. + math.pi/6+ 0.5*math.sin((time.time()-start_time)%(2*math.pi)),
         0.0,
-        0 + 0.5*math.cos(time.time()-start_time),
-        -math.pi/2. + math.pi/6+ 0.5*math.cos(time.time()-start_time)
+        0 + 0.5*math.cos((time.time()-start_time)%(2*math.pi)),
+        -math.pi/2. + math.pi/6+ 0.5*math.cos((time.time()-start_time)%(2*math.pi))
         ]
     
     joint_state_pub.publish(js)
