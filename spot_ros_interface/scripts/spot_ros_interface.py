@@ -98,7 +98,7 @@ class SpotInterface:
 
         cmd = RobotCommandBuilder.stand_command(body_height=stand.translation.z, footprint_R_body=self.quat_to_euler(stand.rotation))
         self.command_client.robot_command(cmd)
-        self.robot.logger.info("Robot stand cmd sent.")
+        rospy.loginfo("Robot stand cmd sent.")
 
     def trajectory_cmd_srv(self, trajectory):
         '''
@@ -123,7 +123,7 @@ class SpotInterface:
                 frame=frame,
             )
             reached_goal = self.block_until_pose_reached(cmd, (x,y,heading))
-            self.robot.logger.info("Waypoint: ({},{},{}). Waypoint reached: {}".format(x,y,heading, reached_goal))
+            rospy.loginfo("Waypoint: ({},{},{}). Waypoint reached: {}".format(x,y,heading, reached_goal))
 
         robot_state = self.get_robot_state()[0].ko_tform_body
         final_pose = geometry_msgs.msg.Pose()
@@ -149,7 +149,7 @@ class SpotInterface:
             cmd,
             end_time_secs=time.time() + self.VELOCITY_CMD_DURATION
         )
-        self.robot.logger.info(
+        rospy.loginfo(
             "Robot velocity cmd sent: v_x=${},v_y=${},v_rot${}".format(v_x, v_y, v_rot))
 
     ### Helper functions ###
@@ -222,7 +222,8 @@ class SpotInterface:
         rs_msg.power_state.header.stamp.nsecs =  robot_state.power_state.timestamp.nanos
         rs_msg.power_state.motor_power_state = robot_state.power_state.motor_power_state #[enum]
         rs_msg.power_state.shore_power_state = robot_state.power_state.shore_power_state #[enum]
-        rs_msg.power_state.locomotion_charge_percentage = robot_state.power_state.locomotion_charge_percentage #[google.protobuf.DoubleValue]
+        # print(robot_state.power_state.locomotion_charge_percentage.value)
+        rs_msg.power_state.locomotion_charge_percentage = robot_state.power_state.locomotion_charge_percentage.value #[google.protobuf.DoubleValue]
         rs_msg.power_state.locomotion_estimated_runtime = robot_state.power_state.locomotion_estimated_runtime #[google.protobuf.Duration]
 
         ### BatteryState conversion [repeated field] 
@@ -237,25 +238,26 @@ class SpotInterface:
 
             battery_state_msg.header = header
 
-            battery_state_msg.percentage = battery_state.charge_percentage/100 #[double]
+            battery_state_msg.percentage = battery_state.charge_percentage.value/100 #[double]
             # NOTE: Using battery_state_msg.charge as the estimated runtime in sec
-            battery_state_msg.charge = battery_state.estimated_runtime.secons #[google.protobuf.Duration]
+            battery_state_msg.charge = battery_state.estimated_runtime.seconds #[google.protobuf.Duration]
             battery_state_msg.current = battery_state.current #[Double]
             battery_state_msg.voltage = battery_state.voltage #[Double]
             # NOTE: Ignoring temperatures for now; no field in BatteryState maps directly to it
             # battery_state_msg. = battery_state.temperatures #[repeated - Double]
             battery_state_msg.power_supply_status = battery_state.status #[enum]
 
-            rs_msg.battery_state.append(battery_state_msg)
+            rs_msg.battery_states.append(battery_state_msg)
 
         ### CommsState conversion [repeated field]
         for comms_state in robot_state.comms_states:
             comms_state_msg = spot_ros_msgs.msg.CommsState()
 
-            comms_state_msg.header.stamp.secs = robot_state.comms_states.timestamp.seconds #[google.protobuf.Timestamp]
-            comms_state_msg.header.stamp.nsecs = robot_state.comms_states.timestamp.nanos #[google.protobuf.Timestamp]
-            comms_state_msg.wifi_mode = robot_state.comms_states.wifi_state.current_mode #[enum] Note: wifi_state is oneof
-            comms_state_msg.essid = robot_state.comms_states.wifi_state.essid #[string]
+            # print()
+            comms_state_msg.header.stamp.secs = comms_state.timestamp.seconds #[google.protobuf.Timestamp]
+            comms_state_msg.header.stamp.nsecs = comms_state.timestamp.nanos #[google.protobuf.Timestamp]
+            comms_state_msg.wifi_mode = comms_state.wifi_state.current_mode #[enum] Note: wifi_state is oneof
+            comms_state_msg.essid = comms_state.wifi_state.essid #[string]
 
             rs_msg.comms_states.append(comms_state_msg)
 
@@ -295,8 +297,9 @@ class SpotInterface:
             rs_msg.system_fault_state.historical_faults.append(system_fault_msg)
 
         #[map<string,enum>]
-        rs_msg.system_fault_state.aggregated.key = robot_state.system_fault_state.aggregated.key
-        rs_msg.system_fault_state.aggregated.value = robot_state.system_fault_state.aggregated.value
+        if robot_state.system_fault_state.aggregated:
+            rs_msg.system_fault_state.aggregated.key = robot_state.system_fault_state.aggregated.key
+            rs_msg.system_fault_state.aggregated.value = robot_state.system_fault_state.aggregated.value
 
         ### EStopState conversion [repeated field]
         for estop_state in robot_state.estop_states:
@@ -315,9 +318,11 @@ class SpotInterface:
         ks_msg = spot_ros_msgs.msg.KinematicState()
 
         # [google.protobuf.Timestamp]
-        ks_msg.header.stamp = robot_state.kinematic_state.acquisition_timestamp
-        header.stamp.secs = robot_state.kinematic_state.acquisition_timestamp.seconds
-        header.stamp.nsecs = robot_state.kinematic_state.acquisition_timestamp.nanos
+        print("!!!!!!!")
+        print(robot_state.kinematic_state)
+        # ks_msg.header.stamp = robot_state.kinematic_state.acquisition_timestamp
+        ks_msg.header.stamp.secs = robot_state.kinematic_state.acquisition_timestamp.seconds
+        ks_msg.header.stamp.nsecs = robot_state.kinematic_state.acquisition_timestamp.nanos
 
         '''joint_states is repeated'''
         js = sensor_msgs.msg.JointState()
@@ -416,12 +421,13 @@ class SpotInterface:
 
         ### FootState conversion [repeated]
         for foot_state in robot_state.foot_state:
-            foot_state_msg = sensor_msgs.msg.FootState()
+            foot_state_msg = spot_ros_msgs.msg.FootState()
 
-            foot_state_msg.foot_position_rt_body.x = foot_state.foot_position_rt_body.x #[Vec3]
-            foot_state_msg.foot_position_rt_body.y = foot_state.foot_position_rt_body.y #[Vec3]
-            foot_state_msg.foot_position_rt_body.z = foot_state.foot_position_rt_body.z #[Vec3]
-            foot_state_msg.contact = rs_foot_state.contact #[enum]
+            # print(foot_state)
+            foot_state_msg.foot_position_rt_body.x = foot_state.foot_position_rt_body.x #[double]
+            foot_state_msg.foot_position_rt_body.y = foot_state.foot_position_rt_body.y #[double]
+            foot_state_msg.foot_position_rt_body.z = foot_state.foot_position_rt_body.z #[double]
+            foot_state_msg.contact = foot_state.contact #[enum]
 
             rs_msg.foot_states.append(foot_state_msg)
         
@@ -460,18 +466,25 @@ class SpotInterface:
         try:
             with bosdyn.client.lease.LeaseKeepAlive(self.lease_client), bosdyn.client.estop.EstopKeepAlive(
                     self.estop_endpoint):
-                self.robot.logger.info(
-                    "Powering on robot... This may take a several seconds.")
+                print("Acquired lease")
+                rospy.loginfo("Acquired lease")
+                rospy.loginfo("Powering on robot... This may take a several seconds.")
                 self.robot.power_on(timeout_sec=20)
                 assert self.robot.is_powered_on(), "Robot power on failed."
-                self.robot.logger.info("Robot powered on.")
+                rospy.loginfo("Robot powered on.")
 
                 while not rospy.is_shutdown():
                     ''' Publish Robot State'''
                     kinematic_state, robot_state = self.get_robot_state()
+
+                    rospy.loginfo("kinematic_state:")
+                    rospy.loginfo(kinematic_state)
                     kinematic_state_pub.publish(kinematic_state)
+                    # rospy.loginfo(robot_state)
                     robot_state_pub.publish(robot_state)
 
+                    rospy.loginfo("3rd person? : {}".format(self.third_person_view))
+                    
                     if self.third_person_view:
                         joint_state_pub.publish(kinematic_state.joint_states)
 
