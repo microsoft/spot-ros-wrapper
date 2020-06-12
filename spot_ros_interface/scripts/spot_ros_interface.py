@@ -257,7 +257,6 @@ class SpotInterface:
         for comms_state in robot_state.comms_states:
             comms_state_msg = spot_ros_msgs.msg.CommsState()
 
-            # print()
             comms_state_msg.header.stamp.secs = comms_state.timestamp.seconds #[google.protobuf.Timestamp]
             comms_state_msg.header.stamp.nsecs = comms_state.timestamp.nanos #[google.protobuf.Timestamp]
             comms_state_msg.wifi_mode = comms_state.wifi_state.current_mode #[enum] Note: wifi_state is oneof
@@ -424,7 +423,6 @@ class SpotInterface:
         for foot_state in robot_state.foot_state:
             foot_state_msg = spot_ros_msgs.msg.FootState()
 
-            # print(foot_state)
             foot_state_msg.foot_position_rt_body.x = foot_state.foot_position_rt_body.x #[double]
             foot_state_msg.foot_position_rt_body.y = foot_state.foot_position_rt_body.y #[double]
             foot_state_msg.foot_position_rt_body.z = foot_state.foot_position_rt_body.z #[double]
