@@ -5,6 +5,7 @@ import logging
 import math
 import sys
 import time
+import pdb # For debugging only
 
 # Bosdyn specific imports
 import bosdyn.client
@@ -86,8 +87,12 @@ class SpotInterface:
         # Only one client at a time can operate a robot.
         self.lease_client = self.robot.ensure_client(
             bosdyn.client.lease.LeaseClient.default_service_name)
-        self.lease = self.lease_client.acquire()
-
+        try:
+            self.lease = self.lease_client.acquire()
+        except bosdyn.client.lease.ResourceAlreadyClaimedError as err:
+            print("ERROR: Lease cannot be acquired. Ensure no other client has the lease. Shutting down.")
+            print(err)
+            sys.exit()
         # True for RViz visualization of Spot in 3rd person with occupancy grid
         self.third_person_view = True
 
@@ -222,9 +227,8 @@ class SpotInterface:
         rs_msg.power_state.header.stamp.nsecs =  robot_state.power_state.timestamp.nanos
         rs_msg.power_state.motor_power_state = robot_state.power_state.motor_power_state #[enum]
         rs_msg.power_state.shore_power_state = robot_state.power_state.shore_power_state #[enum]
-        # print(robot_state.power_state.locomotion_charge_percentage.value)
         rs_msg.power_state.locomotion_charge_percentage = robot_state.power_state.locomotion_charge_percentage.value #[google.protobuf.DoubleValue]
-        rs_msg.power_state.locomotion_estimated_runtime = robot_state.power_state.locomotion_estimated_runtime #[google.protobuf.Duration]
+        rs_msg.power_state.locomotion_estimated_runtime.secs = robot_state.power_state.locomotion_estimated_runtime.seconds #[google.protobuf.Duration]
 
         ### BatteryState conversion [repeated field] 
         for battery_state in robot_state.battery_states:
@@ -241,8 +245,8 @@ class SpotInterface:
             battery_state_msg.percentage = battery_state.charge_percentage.value/100 #[double]
             # NOTE: Using battery_state_msg.charge as the estimated runtime in sec
             battery_state_msg.charge = battery_state.estimated_runtime.seconds #[google.protobuf.Duration]
-            battery_state_msg.current = battery_state.current #[Double]
-            battery_state_msg.voltage = battery_state.voltage #[Double]
+            battery_state_msg.current = battery_state.current.value #[DoubleValue]
+            battery_state_msg.voltage = battery_state.voltage.value #[DoubleValue]
             # NOTE: Ignoring temperatures for now; no field in BatteryState maps directly to it
             # battery_state_msg. = battery_state.temperatures #[repeated - Double]
             battery_state_msg.power_supply_status = battery_state.status #[enum]
@@ -318,9 +322,6 @@ class SpotInterface:
         ks_msg = spot_ros_msgs.msg.KinematicState()
 
         # [google.protobuf.Timestamp]
-        print("!!!!!!!")
-        print(robot_state.kinematic_state)
-        # ks_msg.header.stamp = robot_state.kinematic_state.acquisition_timestamp
         ks_msg.header.stamp.secs = robot_state.kinematic_state.acquisition_timestamp.seconds
         ks_msg.header.stamp.nsecs = robot_state.kinematic_state.acquisition_timestamp.nanos
 
@@ -330,13 +331,13 @@ class SpotInterface:
             # [string]
             js.name.append(joint_state.name)
             # [DoubleValue] Note: angle in rad
-            js.position.append(joint_state.position)
+            js.position.append(joint_state.position.value)
             # [DoubleValue] Note: ang vel
-            js.velocity.append(joint_state.velocity)
+            js.velocity.append(joint_state.velocity.value)
             #[DoubleValue] Note: ang accel. JointState doesn't have accel. Ignoring for now.
             # js.acc(joint_state.acceleration)
             # [DoubleValue] Note: Torque in N-m
-            js.effort.append(joint_state.load)
+            js.effort.append(joint_state.load.value)
         ks_msg.joint_states = js
 
         ''' vision_tform_body'''
@@ -475,10 +476,11 @@ class SpotInterface:
 
                 while not rospy.is_shutdown():
                     ''' Publish Robot State'''
+                    # pdb.set_trace()
                     kinematic_state, robot_state = self.get_robot_state()
 
-                    rospy.loginfo("kinematic_state:")
-                    rospy.loginfo(kinematic_state)
+                    rospy.loginfo("robot_state:")
+                    rospy.loginfo(robot_state)
                     kinematic_state_pub.publish(kinematic_state)
                     # rospy.loginfo(robot_state)
                     robot_state_pub.publish(robot_state)
