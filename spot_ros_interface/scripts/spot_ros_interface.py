@@ -4,6 +4,7 @@ import argparse
 import logging
 import math
 import sys
+import os
 import time
 import pdb # For debugging only
 
@@ -477,13 +478,8 @@ class SpotInterface:
                     # pdb.set_trace()
                     kinematic_state, robot_state = self.get_robot_state()
 
-                    rospy.loginfo("robot_state:")
-                    rospy.loginfo(robot_state)
                     kinematic_state_pub.publish(kinematic_state)
-                    # rospy.loginfo(robot_state)
                     robot_state_pub.publish(robot_state)
-
-                    rospy.loginfo("3rd person? : {}".format(self.third_person_view))
                     
                     if self.third_person_view:
                         joint_state_pub.publish(kinematic_state.joint_states)
