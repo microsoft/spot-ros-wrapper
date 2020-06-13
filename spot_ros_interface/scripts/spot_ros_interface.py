@@ -113,9 +113,9 @@ class SpotInterface:
     def stand_cmd_srv(self, stand):
         """Callback that sends stand cmd at a given height delta [m] from standard configuration"""
 
-        cmd = RobotCommandBuilder.stand_command(body_height=stand.translation.z, footprint_R_body=self.quat_to_euler(stand.rotation))
-        self.command_client.robot_command(cmd)
-        rospy.loginfo("Robot stand cmd sent.")
+        cmd = RobotCommandBuilder.stand_command(body_height=stand.body_pose.translation.z, footprint_R_body=self.quat_to_euler(stand.body_pose.rotation))
+        ret = self.command_client.robot_command(cmd)
+        rospy.loginfo("Robot stand cmd sent. {}".format(ret))
 
     def trajectory_cmd_srv(self, trajectory):
         '''
@@ -205,12 +205,13 @@ class SpotInterface:
             return True
         return False
 
-    def quat_to_euler(self, q):
+    def quat_to_euler(self, quat):
         """Convert a quaternion to xyz Euler angles."""
+        q = [quat.x, quat.y, quat.z, quat.w]
         roll = math.atan2(2 * q[3] * q[0] + q[1] * q[2], 1 - 2 * q[0]**2 + 2 * q[1]**2)
         pitch = math.atan2(2 * q[1] * q[3] - 2 * q[0] * q[2], 1 - 2 * q[1]**2 - 2 * q[2]**2)
         yaw = math.atan2(2 * q[2] * q[3] + 2 * q[0] * q[1], 1 - 2 * q[1]**2 - 2 * q[2]**2)
-        return roll, pitch, yaw
+        return bosdyn.geometry.EulerZXY(yaw=yaw, roll=roll, pitch=pitch)
 
     # TODO: Unit test the get_state method conversion from pbuf to ROS msg (test repeated fields, etc)
     def get_robot_state(self):
@@ -449,7 +450,7 @@ class SpotInterface:
 
         # ROS Node initialization
         rospy.init_node('spot_ros_interface_py')
-        rate = rospy.Rate(10)  # Update at 10hz
+        rate = rospy.Rate(60)  # Update at 60 Hz
 
         # Each service will handle a specific command to Spot instance
         rospy.Service("stand_cmd", spot_ros_srvs.srv.Stand, self.stand_cmd_srv)
