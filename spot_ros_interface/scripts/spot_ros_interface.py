@@ -5,6 +5,7 @@ import logging
 import math
 import sys
 import os
+import subprocess
 import time
 import pdb # For debugging only
 
@@ -44,6 +45,16 @@ class SpotInterface:
     LOGGER = logging.getLogger()
 
     def __init__(self, config):
+        # Ensure interface can ping Spot
+        try:
+            with open(os.devnull, 'wb') as devnull:
+                resp = subprocess.check_call(['ping', '-c', '1', '192.168.80.3'], stdout=devnull, stderr=subprocess.STDOUT)
+                if resp != 0:
+                    print ("ERROR: Cannot detect a Spot with IP: {}.\n Make sure Spot is powered on and on the same network".format(config.hostname))
+                    sys.exit()
+        except:
+            print("ERROR: Cannot detect a Spot with IP: {}.\n Make sure Spot is powered on and on the same network".format(config.hostname))
+            sys.exit()
 
         # Set up SDK
         bosdyn.client.util.setup_logging(config.verbose)
