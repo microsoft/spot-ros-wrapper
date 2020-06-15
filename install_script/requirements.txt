@@ -1,0 +1,5 @@
+catkin_tools
+pyyaml
+rospkg
+PyQt5
+pydot

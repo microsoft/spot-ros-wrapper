@@ -4,7 +4,10 @@ import argparse
 import logging
 import math
 import sys
+import os
+import subprocess
 import time
+import pdb # For debugging only
 
 # Bosdyn specific imports
 import bosdyn.client
@@ -42,6 +45,16 @@ class SpotInterface:
     LOGGER = logging.getLogger()
 
     def __init__(self, config):
+        # Ensure interface can ping Spot
+        try:
+            with open(os.devnull, 'wb') as devnull:
+                resp = subprocess.check_call(['ping', '-c', '1', config.hostname], stdout=devnull, stderr=subprocess.STDOUT)
+                if resp != 0:
+                    print ("ERROR: Cannot detect a Spot with IP: {}.\n Make sure Spot is powered on and on the same network".format(config.hostname))
+                    sys.exit()
+        except:
+            print("ERROR: Cannot detect a Spot with IP: {}.\n Make sure Spot is powered on and on the same network".format(config.hostname))
+            sys.exit()
 
         # Set up SDK
         bosdyn.client.util.setup_logging(config.verbose)
@@ -86,8 +99,12 @@ class SpotInterface:
         # Only one client at a time can operate a robot.
         self.lease_client = self.robot.ensure_client(
             bosdyn.client.lease.LeaseClient.default_service_name)
-        self.lease = self.lease_client.acquire()
-
+        try:
+            self.lease = self.lease_client.acquire()
+        except bosdyn.client.lease.ResourceAlreadyClaimedError as err:
+            print("ERROR: Lease cannot be acquired. Ensure no other client has the lease. Shutting down.")
+            print(err)
+            sys.exit()
         # True for RViz visualization of Spot in 3rd person with occupancy grid
         self.third_person_view = True
 
@@ -96,9 +113,9 @@ class SpotInterface:
     def stand_cmd_srv(self, stand):
         """Callback that sends stand cmd at a given height delta [m] from standard configuration"""
 
-        cmd = RobotCommandBuilder.stand_command(body_height=stand.translation.z, footprint_R_body=self.quat_to_euler(stand.rotation))
-        self.command_client.robot_command(cmd)
-        self.robot.logger.info("Robot stand cmd sent.")
+        cmd = RobotCommandBuilder.stand_command(body_height=stand.body_pose.translation.z, footprint_R_body=self.quat_to_euler(stand.body_pose.rotation))
+        ret = self.command_client.robot_command(cmd)
+        rospy.loginfo("Robot stand cmd sent. {}".format(ret))
 
     def trajectory_cmd_srv(self, trajectory):
         '''
@@ -123,7 +140,7 @@ class SpotInterface:
                 frame=frame,
             )
             reached_goal = self.block_until_pose_reached(cmd, (x,y,heading))
-            self.robot.logger.info("Waypoint: ({},{},{}). Waypoint reached: {}".format(x,y,heading, reached_goal))
+            rospy.loginfo("Waypoint: ({},{},{}). Waypoint reached: {}".format(x,y,heading, reached_goal))
 
         robot_state = self.get_robot_state()[0].ko_tform_body
         final_pose = geometry_msgs.msg.Pose()
@@ -149,7 +166,7 @@ class SpotInterface:
             cmd,
             end_time_secs=time.time() + self.VELOCITY_CMD_DURATION
         )
-        self.robot.logger.info(
+        rospy.loginfo(
             "Robot velocity cmd sent: v_x=${},v_y=${},v_rot${}".format(v_x, v_y, v_rot))
 
     ### Helper functions ###
@@ -188,12 +205,13 @@ class SpotInterface:
             return True
         return False
 
-    def quat_to_euler(self, q):
+    def quat_to_euler(self, quat):
         """Convert a quaternion to xyz Euler angles."""
+        q = [quat.x, quat.y, quat.z, quat.w]
         roll = math.atan2(2 * q[3] * q[0] + q[1] * q[2], 1 - 2 * q[0]**2 + 2 * q[1]**2)
         pitch = math.atan2(2 * q[1] * q[3] - 2 * q[0] * q[2], 1 - 2 * q[1]**2 - 2 * q[2]**2)
         yaw = math.atan2(2 * q[2] * q[3] + 2 * q[0] * q[1], 1 - 2 * q[1]**2 - 2 * q[2]**2)
-        return roll, pitch, yaw
+        return bosdyn.geometry.EulerZXY(yaw=yaw, roll=roll, pitch=pitch)
 
     # TODO: Unit test the get_state method conversion from pbuf to ROS msg (test repeated fields, etc)
     def get_robot_state(self):
@@ -222,8 +240,8 @@ class SpotInterface:
         rs_msg.power_state.header.stamp.nsecs =  robot_state.power_state.timestamp.nanos
         rs_msg.power_state.motor_power_state = robot_state.power_state.motor_power_state #[enum]
         rs_msg.power_state.shore_power_state = robot_state.power_state.shore_power_state #[enum]
-        rs_msg.power_state.locomotion_charge_percentage = robot_state.power_state.locomotion_charge_percentage #[google.protobuf.DoubleValue]
-        rs_msg.power_state.locomotion_estimated_runtime = robot_state.power_state.locomotion_estimated_runtime #[google.protobuf.Duration]
+        rs_msg.power_state.locomotion_charge_percentage = robot_state.power_state.locomotion_charge_percentage.value #[google.protobuf.DoubleValue]
+        rs_msg.power_state.locomotion_estimated_runtime.secs = robot_state.power_state.locomotion_estimated_runtime.seconds #[google.protobuf.Duration]
 
         ### BatteryState conversion [repeated field] 
         for battery_state in robot_state.battery_states:
@@ -237,25 +255,25 @@ class SpotInterface:
 
             battery_state_msg.header = header
 
-            battery_state_msg.percentage = battery_state.charge_percentage/100 #[double]
+            battery_state_msg.percentage = battery_state.charge_percentage.value/100 #[double]
             # NOTE: Using battery_state_msg.charge as the estimated runtime in sec
-            battery_state_msg.charge = battery_state.estimated_runtime.secons #[google.protobuf.Duration]
-            battery_state_msg.current = battery_state.current #[Double]
-            battery_state_msg.voltage = battery_state.voltage #[Double]
+            battery_state_msg.charge = battery_state.estimated_runtime.seconds #[google.protobuf.Duration]
+            battery_state_msg.current = battery_state.current.value #[DoubleValue]
+            battery_state_msg.voltage = battery_state.voltage.value #[DoubleValue]
             # NOTE: Ignoring temperatures for now; no field in BatteryState maps directly to it
             # battery_state_msg. = battery_state.temperatures #[repeated - Double]
             battery_state_msg.power_supply_status = battery_state.status #[enum]
 
-            rs_msg.battery_state.append(battery_state_msg)
+            rs_msg.battery_states.append(battery_state_msg)
 
         ### CommsState conversion [repeated field]
         for comms_state in robot_state.comms_states:
             comms_state_msg = spot_ros_msgs.msg.CommsState()
 
-            comms_state_msg.header.stamp.secs = robot_state.comms_states.timestamp.seconds #[google.protobuf.Timestamp]
-            comms_state_msg.header.stamp.nsecs = robot_state.comms_states.timestamp.nanos #[google.protobuf.Timestamp]
-            comms_state_msg.wifi_mode = robot_state.comms_states.wifi_state.current_mode #[enum] Note: wifi_state is oneof
-            comms_state_msg.essid = robot_state.comms_states.wifi_state.essid #[string]
+            comms_state_msg.header.stamp.secs = comms_state.timestamp.seconds #[google.protobuf.Timestamp]
+            comms_state_msg.header.stamp.nsecs = comms_state.timestamp.nanos #[google.protobuf.Timestamp]
+            comms_state_msg.wifi_mode = comms_state.wifi_state.current_mode #[enum] Note: wifi_state is oneof
+            comms_state_msg.essid = comms_state.wifi_state.essid #[string]
 
             rs_msg.comms_states.append(comms_state_msg)
 
@@ -295,8 +313,9 @@ class SpotInterface:
             rs_msg.system_fault_state.historical_faults.append(system_fault_msg)
 
         #[map<string,enum>]
-        rs_msg.system_fault_state.aggregated.key = robot_state.system_fault_state.aggregated.key
-        rs_msg.system_fault_state.aggregated.value = robot_state.system_fault_state.aggregated.value
+        if robot_state.system_fault_state.aggregated:
+            rs_msg.system_fault_state.aggregated.key = robot_state.system_fault_state.aggregated.key
+            rs_msg.system_fault_state.aggregated.value = robot_state.system_fault_state.aggregated.value
 
         ### EStopState conversion [repeated field]
         for estop_state in robot_state.estop_states:
@@ -315,9 +334,8 @@ class SpotInterface:
         ks_msg = spot_ros_msgs.msg.KinematicState()
 
         # [google.protobuf.Timestamp]
-        ks_msg.header.stamp = robot_state.kinematic_state.acquisition_timestamp
-        header.stamp.secs = robot_state.kinematic_state.acquisition_timestamp.seconds
-        header.stamp.nsecs = robot_state.kinematic_state.acquisition_timestamp.nanos
+        ks_msg.header.stamp.secs = robot_state.kinematic_state.acquisition_timestamp.seconds
+        ks_msg.header.stamp.nsecs = robot_state.kinematic_state.acquisition_timestamp.nanos
 
         '''joint_states is repeated'''
         js = sensor_msgs.msg.JointState()
@@ -325,13 +343,13 @@ class SpotInterface:
             # [string]
             js.name.append(joint_state.name)
             # [DoubleValue] Note: angle in rad
-            js.position.append(joint_state.position)
+            js.position.append(joint_state.position.value)
             # [DoubleValue] Note: ang vel
-            js.velocity.append(joint_state.velocity)
+            js.velocity.append(joint_state.velocity.value)
             #[DoubleValue] Note: ang accel. JointState doesn't have accel. Ignoring for now.
             # js.acc(joint_state.acceleration)
             # [DoubleValue] Note: Torque in N-m
-            js.effort.append(joint_state.load)
+            js.effort.append(joint_state.load.value)
         ks_msg.joint_states = js
 
         ''' vision_tform_body'''
@@ -416,12 +434,12 @@ class SpotInterface:
 
         ### FootState conversion [repeated]
         for foot_state in robot_state.foot_state:
-            foot_state_msg = sensor_msgs.msg.FootState()
+            foot_state_msg = spot_ros_msgs.msg.FootState()
 
-            foot_state_msg.foot_position_rt_body.x = foot_state.foot_position_rt_body.x #[Vec3]
-            foot_state_msg.foot_position_rt_body.y = foot_state.foot_position_rt_body.y #[Vec3]
-            foot_state_msg.foot_position_rt_body.z = foot_state.foot_position_rt_body.z #[Vec3]
-            foot_state_msg.contact = rs_foot_state.contact #[enum]
+            foot_state_msg.foot_position_rt_body.x = foot_state.foot_position_rt_body.x #[double]
+            foot_state_msg.foot_position_rt_body.y = foot_state.foot_position_rt_body.y #[double]
+            foot_state_msg.foot_position_rt_body.z = foot_state.foot_position_rt_body.z #[double]
+            foot_state_msg.contact = foot_state.contact #[enum]
 
             rs_msg.foot_states.append(foot_state_msg)
         
@@ -432,7 +450,7 @@ class SpotInterface:
 
         # ROS Node initialization
         rospy.init_node('spot_ros_interface_py')
-        rate = rospy.Rate(10)  # Update at 10hz
+        rate = rospy.Rate(60)  # Update at 60 Hz
 
         # Each service will handle a specific command to Spot instance
         rospy.Service("stand_cmd", spot_ros_srvs.srv.Stand, self.stand_cmd_srv)
@@ -460,18 +478,21 @@ class SpotInterface:
         try:
             with bosdyn.client.lease.LeaseKeepAlive(self.lease_client), bosdyn.client.estop.EstopKeepAlive(
                     self.estop_endpoint):
-                self.robot.logger.info(
-                    "Powering on robot... This may take a several seconds.")
+                print("Acquired lease")
+                rospy.loginfo("Acquired lease")
+                rospy.loginfo("Powering on robot... This may take a several seconds.")
                 self.robot.power_on(timeout_sec=20)
                 assert self.robot.is_powered_on(), "Robot power on failed."
-                self.robot.logger.info("Robot powered on.")
+                rospy.loginfo("Robot powered on.")
 
                 while not rospy.is_shutdown():
                     ''' Publish Robot State'''
+                    # pdb.set_trace()
                     kinematic_state, robot_state = self.get_robot_state()
+
                     kinematic_state_pub.publish(kinematic_state)
                     robot_state_pub.publish(robot_state)
-
+                    
                     if self.third_person_view:
                         joint_state_pub.publish(kinematic_state.joint_states)
 
