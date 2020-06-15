@@ -6,7 +6,9 @@ import spot_ros_msgs.msg
 import math
 import time
 
-
+'''
+This script publishes simulated joint angles to test out the Rviz simulation
+'''
 
 joint_state_pub = rospy.Publisher(
     "joint_state_from_spot", sensor_msgs.msg.JointState, queue_size=20)
