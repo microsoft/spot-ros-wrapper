@@ -48,7 +48,7 @@ class SpotInterface:
         # Ensure interface can ping Spot
         try:
             with open(os.devnull, 'wb') as devnull:
-                resp = subprocess.check_call(['ping', '-c', '1', '192.168.80.3'], stdout=devnull, stderr=subprocess.STDOUT)
+                resp = subprocess.check_call(['ping', '-c', '1', config.hostname], stdout=devnull, stderr=subprocess.STDOUT)
                 if resp != 0:
                     print ("ERROR: Cannot detect a Spot with IP: {}.\n Make sure Spot is powered on and on the same network".format(config.hostname))
                     sys.exit()
