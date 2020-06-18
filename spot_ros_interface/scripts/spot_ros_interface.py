@@ -110,6 +110,12 @@ class SpotInterface:
 
     ### Callback functions ###
 
+    def self_right_cmd_srv(self, stand):
+        """ Callback that sends self-right cmd"""
+        cmd = RobotCommandBuilder.selfright_command()
+        ret = self.command_client.robot_command(cmd)
+        rospy.loginfo("Robot self right cmd sent. {}".format(ret))
+
     def stand_cmd_srv(self, stand):
         """Callback that sends stand cmd at a given height delta [m] from standard configuration"""
 
@@ -152,9 +158,9 @@ class SpotInterface:
     def velocity_cmd_srv(self, twist):
         """Callback that sends instantaneous velocity [m/s] commands to Spot"""
         
-        v_x = twist.linear.x
-        v_y = twist.linear.y
-        v_rot = twist.angular.z
+        v_x = twist.velocity.linear.x
+        v_y = twist.velocity.linear.y
+        v_rot = twist.velocity.angular.z
 
         cmd = RobotCommandBuilder.velocity_command(
             v_x=v_x,
@@ -453,6 +459,7 @@ class SpotInterface:
         rate = rospy.Rate(60)  # Update at 60 Hz
 
         # Each service will handle a specific command to Spot instance
+        rospy.Service("self_right_cmd", spot_ros_srvs.srv.Stand, self.self_right_cmd_srv)
         rospy.Service("stand_cmd", spot_ros_srvs.srv.Stand, self.stand_cmd_srv)
         rospy.Service("trajectory_cmd",
                       spot_ros_srvs.srv.Trajectory, self.trajectory_cmd_srv)
@@ -478,7 +485,6 @@ class SpotInterface:
         try:
             with bosdyn.client.lease.LeaseKeepAlive(self.lease_client), bosdyn.client.estop.EstopKeepAlive(
                     self.estop_endpoint):
-                print("Acquired lease")
                 rospy.loginfo("Acquired lease")
                 rospy.loginfo("Powering on robot... This may take a several seconds.")
                 self.robot.power_on(timeout_sec=20)
