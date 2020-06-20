@@ -20,8 +20,8 @@ instructions="\n\
 \u2502     wasd - Move            \u2502\n\
 \u2502     qe - Turn              \u2502\n\
 \u2502     r - Self-right         \u2502\n\
-\u2502     j - Height down        \u2502\n\
-\u2502     k - Height up          \u2502\n\
+\u2502     j - Height up          \u2502\n\
+\u2502     k - Height down        \u2502\n\
 \u2502                            \u2502\n\
 \u2502     SPACE - E-Stop (TODO)  \u2502\n\
 \u2502     Q - Quit               \u2502\n\
