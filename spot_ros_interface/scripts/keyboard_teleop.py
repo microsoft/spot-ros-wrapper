@@ -29,19 +29,6 @@ instructions="\n\
 \u2514{}\u2518\
 ".format(line*3,line*3,line*28)
 
-# options={
-#     'w': ,
-#     'a': ,
-#     's': ,
-#     'd': ,
-#     'W': ,
-#     'A': ,
-#     'S': ,
-#     'D': ,
-#     'u': ,
-#     'j': ,
-#     'k':    
-# }
 
 # Define velocity at which Spot will move
 lin_vel = 1.0 # m/s
