@@ -484,7 +484,6 @@ class SpotInterface:
 
         # depth_image_pub = rospy.Publisher(
         #     "depth_image", sensor_msgs.msg.Image, queue_size=20) # TODO: Publish depth imgs
-        # state_pub = rospy.Publisher("state", ,queue_size=10) # TODO: Publish robot state
 
         try:
             with bosdyn.client.lease.LeaseKeepAlive(self.lease_client), bosdyn.client.estop.EstopKeepAlive(
@@ -538,7 +537,6 @@ class SpotInterface:
 
                             image_pub.publish(image_capture)
 
-                    # state_pub.publish()
                     rospy.logdebug("Looping...")
                     rate.sleep()
 
