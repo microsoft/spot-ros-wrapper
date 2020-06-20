@@ -20,8 +20,8 @@ instructions="\n\
 \u2502     wasd - Move            \u2502\n\
 \u2502     qe - Turn              \u2502\n\
 \u2502     r - Self-right         \u2502\n\
-\u2502     j - height down        \u2502\n\
-\u2502     k - height up          \u2502\n\
+\u2502     j - Height down        \u2502\n\
+\u2502     k - Height up          \u2502\n\
 \u2502                            \u2502\n\
 \u2502     SPACE - E-Stop (TODO)  \u2502\n\
 \u2502     Q - Quit               \u2502\n\
@@ -40,7 +40,7 @@ height_down = -1.0
 
 def self_right_service(key):
     tf = geometry_msgs.msg.Transform()
-    
+
     self_right_srv_req.body_pose.translation = tf.translation
     self_right_srv_req.body_pose.rotation = tf.rotation
 
