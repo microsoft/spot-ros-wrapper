@@ -116,12 +116,16 @@ class SpotInterface:
         ret = self.command_client.robot_command(cmd)
         rospy.loginfo("Robot self right cmd sent. {}".format(ret))
 
+        return []
+
     def stand_cmd_srv(self, stand):
         """Callback that sends stand cmd at a given height delta [m] from standard configuration"""
 
         cmd = RobotCommandBuilder.stand_command(body_height=stand.body_pose.translation.z, footprint_R_body=self.quat_to_euler(stand.body_pose.rotation))
         ret = self.command_client.robot_command(cmd)
         rospy.loginfo("Robot stand cmd sent. {}".format(ret))
+
+        return []
 
     def trajectory_cmd_srv(self, trajectory):
         '''
@@ -174,7 +178,7 @@ class SpotInterface:
         )
         rospy.loginfo(
             "Robot velocity cmd sent: v_x=${},v_y=${},v_rot${}".format(v_x, v_y, v_rot))
-
+        return []
     ### Helper functions ###
 
     def block_until_pose_reached(self, cmd, goal):
@@ -467,7 +471,7 @@ class SpotInterface:
 
         # Single image publisher will publish all images from all Spot cameras
         image_pub = rospy.Publisher(
-            "image_capture", spot_ros_msgs.msg.ImageCapture, queue_size=20)
+            "image_capture", sensor_msgs.msg.Image, queue_size=20)
         kinematic_state_pub = rospy.Publisher(
             "kinematic_state", spot_ros_msgs.msg.KinematicState, queue_size=20)
         robot_state_pub = rospy.Publisher(
@@ -532,7 +536,7 @@ class SpotInterface:
                             image_capture.image = i
                             image_capture.ko_tform_body = ko_tform_body
 
-                            image_pub.publish(image_capture)
+                            image_pub.publish(i)
 
                     # state_pub.publish()
                     rospy.logdebug("Looping...")

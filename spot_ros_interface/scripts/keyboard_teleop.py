@@ -48,10 +48,8 @@ def self_right_service(key):
     self_right_srv_req.body_pose.translation = tf.translation
     self_right_srv_req.body_pose.rotation = tf.rotation
 
-    print("Sending")
-    print(self_right_srv_req)
-
     try:
+        rospy.wait_for_service("self_right_cmd", timeout=2.0)
         self_right_srv_pub(self_right_srv_req)
     except rospy.ServiceException as e:
         print("Service call failed: %s"%e)
@@ -74,10 +72,8 @@ def stand_service(key):
     stand_srv_req.body_pose.translation = tf.translation
     stand_srv_req.body_pose.rotation = tf.rotation
 
-    print("Sending")
-    print(stand_srv_req)
-
     try:
+        rospy.wait_for_service("stand_cmd", timeout=2.0)
         stand_srv_pub(stand_srv_req)
     except rospy.ServiceException as e:
         print("Service call failed: %s"%e)
@@ -93,26 +89,25 @@ def vel_service(key):
     if key=='w':
         twist.linear.x = lin_vel
     elif key=='a':
-        twist.linear.z = -lin_vel
+        twist.linear.y = lin_vel
     elif key=='s':
         twist.linear.x = -lin_vel
     elif key=='d':
-        twist.linear.z = lin_vel
+        twist.linear.y = -lin_vel
     elif key=='q':
         twist.angular.z = ang_vel
     elif key=='e':
         twist.angular.z = -ang_vel
 
-    vel_srv_req.velocity.linear.x = twist.linear.x
+    vel_srv_req.velocity.linear = twist.linear
     vel_srv_req.velocity.angular = twist.angular
 
-    print("Sending")
-    print(vel_srv_req)
-
     try:
+        rospy.wait_for_service("velocity_cmd", timeout=2.0)
         vel_srv_pub(vel_srv_req)
     except rospy.ServiceException as e:
-        print("Service call failed: %s"%e)
+        print("Service call failed: %s"%e, end='')
+
 
 rospy.init_node('keyboard_teleop')
 rate = rospy.Rate(60)
@@ -141,7 +136,7 @@ twist = geometry_msgs.msg.Twist()
 print(instructions)
 while not rospy.is_shutdown():
     key = readchar.readkey()
-    print('Key pressed: {}\r'.format(key), end="")
+    print('{}\rKey pressed: {}\r'.format(' '*45, key), end="")
 
     if key=="Q":
         sys.exit()
