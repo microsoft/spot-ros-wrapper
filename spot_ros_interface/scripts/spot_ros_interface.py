@@ -471,7 +471,7 @@ class SpotInterface:
 
         # Single image publisher will publish all images from all Spot cameras
         image_pub = rospy.Publisher(
-            "image_capture", sensor_msgs.msg.Image, queue_size=20)
+            "image_capture", spot_ros_msgs.msg.ImageCapture, queue_size=20)
         kinematic_state_pub = rospy.Publisher(
             "kinematic_state", spot_ros_msgs.msg.KinematicState, queue_size=20)
         robot_state_pub = rospy.Publisher(
@@ -536,7 +536,7 @@ class SpotInterface:
                             image_capture.image = i
                             image_capture.ko_tform_body = ko_tform_body
 
-                            image_pub.publish(i)
+                            image_pub.publish(image_capture)
 
                     # state_pub.publish()
                     rospy.logdebug("Looping...")
