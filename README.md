@@ -35,13 +35,13 @@ source /home/$USER/tmp/$1/bin/activate
 echo "
 # Must pass in name of venv as the only positional arg
 activate_venv(){
-        source /home/$USER/tmp/$1/bin/activate
+        source /home/\$USER/tmp/\$1/bin/activate
 }
 # Must pass in name of venv as the only postional arg
 create_venv(){
-        virtualenv -p python3 $HOME/tmp/$1/
+        virtualenv -p python3 \$HOME/tmp/\$1/
 }
-alias ls_venv='ls /home/$USER/tmp/'
+alias ls_venv='ls /home/\$USER/tmp/'
 " >> ~/.bashrc
 ```
 
