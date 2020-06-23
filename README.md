@@ -187,5 +187,15 @@ rosrun spot_ros_interface  spot_ros_interface.py --username USERNAME --password 
 
 *Note:* You must be able to ping Spot's IP addess in order to communicate. The easiest way to do so is to connect to Spot's Wi-Fi hotspot directly. For more information, reference Spot's instruction manuals on ways to communicate.
 
+### Controlling Spot from your keyboard
+
+With the ROS wrapper running, open a new terminal and run keyboard_teleop.py in the spot_ros_interface ROS package:
+```
+rosrun spot_ros_interface keyboard_teleop.py
+```
+and follow the instructions on screen.
+
+*Note:* If Spot is in a faulty state and/or upside down, make sure to call the self-right command first (from the keyboard_teleop application, press "r").
+
 # Contribute
 [ROS package guidelines](https://github.com/ethz-asl/mav_tools_public/wiki/How-to-Write-a-ROS-Package)
