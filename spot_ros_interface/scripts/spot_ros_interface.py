@@ -110,12 +110,22 @@ class SpotInterface:
 
     ### Callback functions ###
 
+    def self_right_cmd_srv(self, stand):
+        """ Callback that sends self-right cmd"""
+        cmd = RobotCommandBuilder.selfright_command()
+        ret = self.command_client.robot_command(cmd)
+        rospy.loginfo("Robot self right cmd sent. {}".format(ret))
+
+        return []
+
     def stand_cmd_srv(self, stand):
         """Callback that sends stand cmd at a given height delta [m] from standard configuration"""
 
         cmd = RobotCommandBuilder.stand_command(body_height=stand.body_pose.translation.z, footprint_R_body=self.quat_to_euler(stand.body_pose.rotation))
         ret = self.command_client.robot_command(cmd)
         rospy.loginfo("Robot stand cmd sent. {}".format(ret))
+
+        return []
 
     def trajectory_cmd_srv(self, trajectory):
         '''
@@ -152,9 +162,9 @@ class SpotInterface:
     def velocity_cmd_srv(self, twist):
         """Callback that sends instantaneous velocity [m/s] commands to Spot"""
         
-        v_x = twist.linear.x
-        v_y = twist.linear.y
-        v_rot = twist.angular.z
+        v_x = twist.velocity.linear.x
+        v_y = twist.velocity.linear.y
+        v_rot = twist.velocity.angular.z
 
         cmd = RobotCommandBuilder.velocity_command(
             v_x=v_x,
@@ -168,7 +178,7 @@ class SpotInterface:
         )
         rospy.loginfo(
             "Robot velocity cmd sent: v_x=${},v_y=${},v_rot${}".format(v_x, v_y, v_rot))
-
+        return []
     ### Helper functions ###
 
     def block_until_pose_reached(self, cmd, goal):
@@ -453,6 +463,7 @@ class SpotInterface:
         rate = rospy.Rate(60)  # Update at 60 Hz
 
         # Each service will handle a specific command to Spot instance
+        rospy.Service("self_right_cmd", spot_ros_srvs.srv.Stand, self.self_right_cmd_srv)
         rospy.Service("stand_cmd", spot_ros_srvs.srv.Stand, self.stand_cmd_srv)
         rospy.Service("trajectory_cmd",
                       spot_ros_srvs.srv.Trajectory, self.trajectory_cmd_srv)
@@ -473,12 +484,10 @@ class SpotInterface:
 
         # depth_image_pub = rospy.Publisher(
         #     "depth_image", sensor_msgs.msg.Image, queue_size=20) # TODO: Publish depth imgs
-        # state_pub = rospy.Publisher("state", ,queue_size=10) # TODO: Publish robot state
 
         try:
             with bosdyn.client.lease.LeaseKeepAlive(self.lease_client), bosdyn.client.estop.EstopKeepAlive(
                     self.estop_endpoint):
-                print("Acquired lease")
                 rospy.loginfo("Acquired lease")
                 rospy.loginfo("Powering on robot... This may take a several seconds.")
                 self.robot.power_on(timeout_sec=20)
@@ -528,7 +537,6 @@ class SpotInterface:
 
                             image_pub.publish(image_capture)
 
-                    # state_pub.publish()
                     rospy.logdebug("Looping...")
                     rate.sleep()
 
