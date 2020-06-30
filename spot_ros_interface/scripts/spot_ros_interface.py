@@ -8,6 +8,8 @@ import os
 import subprocess
 import time
 import pdb # For debugging only
+import numpy as np
+from scipy import ndimage
 
 # Bosdyn specific imports
 import bosdyn.client
@@ -26,6 +28,7 @@ from bosdyn.client.frame_helpers import get_a_tform_b, get_vision_tform_body, ge
 
 # ROS specific imports
 import rospy
+import diagnostic_msgs.msg
 import geometry_msgs.msg
 import std_msgs.msg
 import sensor_msgs.msg
@@ -50,7 +53,7 @@ class SpotInterface:
             with open(os.devnull, 'wb') as devnull:
                 resp = subprocess.check_call(['ping', '-c', '1', config.hostname], stdout=devnull, stderr=subprocess.STDOUT)
                 if resp != 0:
-                    print ("ERROR: Cannot detect a Spot with IP: {}.\n Make sure Spot is powered on and on the same network".format(config.hostname))
+                    print ("ERROR: Cannot detect a Spot with IP: {}.\nMake sure Spot is powered on and on the same network".format(config.hostname))
                     sys.exit()
         except:
             print("ERROR: Cannot detect a Spot with IP: {}.\n Make sure Spot is powered on and on the same network".format(config.hostname))
@@ -105,8 +108,12 @@ class SpotInterface:
             print("ERROR: Lease cannot be acquired. Ensure no other client has the lease. Shutting down.")
             print(err)
             sys.exit()
+            
         # True for RViz visualization of Spot in 3rd person with occupancy grid
         self.third_person_view = True
+
+        # Power on motors
+        self.motors_on = config.motors_on.lower()!="n"
 
     ### Callback functions ###
 
@@ -324,8 +331,14 @@ class SpotInterface:
 
         #[map<string,enum>]
         if robot_state.system_fault_state.aggregated:
-            rs_msg.system_fault_state.aggregated.key = robot_state.system_fault_state.aggregated.key
-            rs_msg.system_fault_state.aggregated.value = robot_state.system_fault_state.aggregated.value
+            # print("!!!ERROR: {}".format(robot_state.system_fault_state.aggregated))
+            for key in robot_state.system_fault_state.aggregated:
+                d = diagnostic_msgs.msg.KeyValue()
+                d.key = key
+                d.value = robot_state.system_fault_state.aggregated[key]
+                rs_msg.system_fault_state.aggregated.append(d)
+            # rs_msg.system_fault_state.aggregated.key = robot_state.system_fault_state.aggregated.key
+            # rs_msg.system_fault_state.aggregated.value = robot_state.system_fault_state.aggregated.value
 
         ### EStopState conversion [repeated field]
         for estop_state in robot_state.estop_states:
@@ -477,6 +490,11 @@ class SpotInterface:
         robot_state_pub = rospy.Publisher(
             "robot_state", spot_ros_msgs.msg.RobotState, queue_size=20)
 
+        image_only_pub = rospy.Publisher(
+            "image", sensor_msgs.msg.Image, queue_size=20)
+        camera_info_pub = rospy.Publisher(
+            "cam_info", sensor_msgs.msg.CameraInfo, queue_size=20)
+
         # For RViz 3rd person POV visualization
         if self.third_person_view:
             joint_state_pub = rospy.Publisher(
@@ -489,10 +507,13 @@ class SpotInterface:
             with bosdyn.client.lease.LeaseKeepAlive(self.lease_client), bosdyn.client.estop.EstopKeepAlive(
                     self.estop_endpoint):
                 rospy.loginfo("Acquired lease")
-                rospy.loginfo("Powering on robot... This may take a several seconds.")
-                self.robot.power_on(timeout_sec=20)
-                assert self.robot.is_powered_on(), "Robot power on failed."
-                rospy.loginfo("Robot powered on.")
+                if self.motors_on:
+                    rospy.loginfo("Powering on robot... This may take a several seconds.")
+                    self.robot.power_on(timeout_sec=20)
+                    assert self.robot.is_powered_on(), "Robot power on failed."
+                    rospy.loginfo("Robot powered on.")
+                else:
+                    rospy.loginfo("Not powering on robot, continuing")
 
                 while not rospy.is_shutdown():
                     ''' Publish Robot State'''
@@ -503,39 +524,112 @@ class SpotInterface:
                     robot_state_pub.publish(robot_state)
                     
                     if self.third_person_view:
+                        # The following is to add the base_link of spot to the joint states msg
+                        # So that the rviz visualization moves when the robot moves
+
+                        # js = kinematic_state.joint_states
+                        # js.name.append('base_link')
+                        # # [DoubleValue] Note: angle in rad
+                        # js.position.append(joint_state.position.value)
+                        # # [DoubleValue] Note: ang vel
+                        # js.velocity.append(joint_state.velocity.value)
+                        # #[DoubleValue] Note: ang accel. JointState doesn't have accel. Ignoring for now.
+                        # # js.acc(joint_state.acceleration)
+                        # # [DoubleValue] Note: Torque in N-m
+                        # js.effort.append(joint_state.load.value)
                         joint_state_pub.publish(kinematic_state.joint_states)
 
                     ''' Publish Images'''
                     # Each element in image_response list is an image from each one of the sensors
-                    image_list = self.image_client.get_image_from_sources(
-                        self.image_source_names)
+                    # image_list = self.image_client.get_image_from_sources(
+                    #     self.image_source_names)
 
+                    # Debug only. Using imgs[2] only
+                    img_reqs = [image_pb2.ImageRequest(image_source_name=source, quality_percent=100, image_format=image_pb2.Image.FORMAT_RAW) for source in self.image_source_names[2:3]]
+                    image_list = self.image_client.get_image(img_reqs)
+                    # print(image_list)
+
+                    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
                     for img in image_list:
-                        if not img.status == image_pb2.ImageResponse.STATUS_OK:
+                        if img.status == image_pb2.ImageResponse.STATUS_OK:
 
                             header = std_msgs.msg.Header()
-                            header.stamp.secs = img.shot.sample.acquisition_time.seconds
-                            header.stamp.nsecs = img.shot.sample.acquisition_time.nanos
+                            header.stamp.secs = img.shot.acquisition_time.seconds
+                            header.stamp.nsecs = img.shot.acquisition_time.nanos
                             header.frame_id = img.source.name
+
+                            # From BD example
+                            if img.shot.image.pixel_format == image_pb2.Image.PIXEL_FORMAT_DEPTH_U16:
+                                dtype = np.uint16
+                                extension = ".png"
+                            else:
+                                dtype = np.uint8
+                                extension = ".jpg"
+
+                            image = np.fromstring(img.shot.image.data, dtype=dtype)
+                            if img.shot.image.format == image_pb2.Image.FORMAT_RAW:
+                                image = image.reshape(img.shot.image.rows, img.shot.image.cols)
+                                image = ndimage.rotate(image, -90)
+                                
+                            else:
+                                print("There has been an error. cv2 needed")
 
                             # Make Image component of ImageCapture
                             i = sensor_msgs.msg.Image()
                             i.header = header
-                            i.width = img.shot.image.cols
-                            i.height = img.shot.image.rows
-                            i.data = img.shot.image.data
-                            
+                            i.width = img.shot.image.rows#.cols
+                            i.height = img.shot.image.cols#.rows
+                            i.data = image.tobytes()
+                            i.step = img.shot.image.rows#.cols
+                            i.encoding = 'mono8'
+
+                            # CameraInfo
+                            cam_info = sensor_msgs.msg.CameraInfo()
+                            cam_info.header = i.header
+                            cam_info.width = i.width
+                            cam_info.height = i.height
+                            # cam_info.distortion_model = "plumb_bob"
+                            # cam_info.D = [0.0,0.0,0.0,0.0]
+                            f = img.source.pinhole.intrinsics.focal_length
+                            c = img.source.pinhole.intrinsics.principal_point
+                            cam_info.K = \
+                                [f.x, 0, c.x,  \
+                                0, f.y, c.y,   \
+                                0,   0,  1]
+
+                            # print(img.source)
+
                             # Make Transform component of ImageCapture
                             ko_tform_body = geometry_msgs.msg.Transform()
-                            ko_tform_body.translation = img.ko_tform_body.position
-                            ko_tform_body.rotation = img.ko_tform_body.rotation
+                            
+                            body_tform_cam = get_a_tform_b(img.shot.transforms_snapshot,
+                                BODY_FRAME_NAME,
+                                img.shot.frame_name_image_sensor)
+                            world_tform_body = get_a_tform_b(img.shot.transforms_snapshot,
+                                VISION_FRAME_NAME,
+                                BODY_FRAME_NAME)
+                            
+                            cam_tform_world = world_tform_body * body_tform_cam
+                            
+                            ko_tform_body.translation.x = cam_tform_world.position.x
+                            ko_tform_body.translation.y = cam_tform_world.position.y
+                            ko_tform_body.translation.z = cam_tform_world.position.z
+                            ko_tform_body.rotation.x = cam_tform_world.rotation.x
+                            ko_tform_body.rotation.y = cam_tform_world.rotation.y
+                            ko_tform_body.rotation.z = cam_tform_world.rotation.z
+                            ko_tform_body.rotation.w = cam_tform_world.rotation.w
+
+                            print("name: {} transform: {}".format(img.shot.frame_name_image_sensor, cam_tform_world))
                             
                             # Populate ImageCapture msg
                             image_capture = spot_ros_msgs.msg.ImageCapture()
                             image_capture.image = i
                             image_capture.ko_tform_body = ko_tform_body
 
+                            # Publish all
                             image_pub.publish(image_capture)
+                            image_only_pub.publish(i)
+                            camera_info_pub.publish(cam_info)
 
                     rospy.logdebug("Looping...")
                     rate.sleep()
@@ -548,6 +642,7 @@ if __name__ == '__main__':
     """Command line interface."""
     parser = argparse.ArgumentParser()
     bosdyn.client.util.add_common_arguments(parser)
+    parser.add_argument('--motors_on', help='Power on motors [Y/n]', default="Y")
     options = parser.parse_args(sys.argv[1:])
     try:
         robot = SpotInterface(options)
