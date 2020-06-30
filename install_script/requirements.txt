@@ -4,3 +4,4 @@ rospkg
 PyQt5
 pydot
 readchar
+scipy
