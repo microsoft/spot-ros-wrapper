@@ -105,3 +105,8 @@ venv.bak/
 
 .vscode
 /.vs
+
+azure_spatial_anchors_ros/
+catkin_simple/
+gflags_catkin/
+glog_catkin/
