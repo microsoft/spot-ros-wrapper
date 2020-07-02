@@ -197,5 +197,10 @@ and follow the instructions on screen.
 
 *Note:* If Spot is in a faulty state and/or upside down, make sure to call the self-right command first (from the keyboard_teleop application, press "r").
 
+### To run occupancy grid visualizer
+
+Install voxblox (ensure you specify ROS Melodic during installation, NOT ROS Kinetic): https://voxblox.readthedocs.io/en/latest/pages/Installation.html
+
+
 # Contribute
 [ROS package guidelines](https://github.com/ethz-asl/mav_tools_public/wiki/How-to-Write-a-ROS-Package)
