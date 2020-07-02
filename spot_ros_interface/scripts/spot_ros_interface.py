@@ -19,6 +19,7 @@ import bosdyn.geometry
 from bosdyn.client.image import ImageClient
 from bosdyn.client.robot_command import RobotCommandBuilder, RobotCommandClient
 from bosdyn.client.robot_state import RobotStateClient
+from bosdyn.client.local_grid import LocalGridClient
 from bosdyn.api import trajectory_pb2, image_pb2, robot_state_pb2
 
 from bosdyn.client.frame_helpers import get_a_tform_b, get_vision_tform_body, get_odom_tform_body,\
@@ -72,6 +73,9 @@ class SpotInterface:
         # Client to send cmds to Spot
         self.command_client = self.robot.ensure_client(
             RobotCommandClient.default_service_name)
+
+        self.grid_client = self.robot.ensure_client(
+            LocalGridClient.default_service_name)
 
         # Client to request images from Spot
         self.image_client = self.robot.ensure_client(
@@ -536,6 +540,21 @@ class SpotInterface:
                             image_capture.ko_tform_body = ko_tform_body
 
                             image_pub.publish(image_capture)
+                    
+                    print("going to call it")
+                    import time
+                    time.sleep(5)
+                    print("calling it, hope it's standing")
+                    time.sleep(1)
+                    proto = self.grid_client.get_local_grids(
+                        ['terrain', 'terrain_valid', 'intensity', 'no_step', 'obstacle_distance'])
+                    print("ojferro")
+                    print(proto)
+                    file2 = open("./newwww_output_proto.txt","w+")
+                    file2.write(str(proto))
+                    file2.close()
+                    import time
+                    time.sleep(100)
 
                     rospy.logdebug("Looping...")
                     rate.sleep()
