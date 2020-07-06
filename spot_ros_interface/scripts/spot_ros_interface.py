@@ -20,7 +20,7 @@ from bosdyn.client.image import ImageClient
 from bosdyn.client.robot_command import RobotCommandBuilder, RobotCommandClient
 from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.client.local_grid import LocalGridClient
-from bosdyn.api import trajectory_pb2, image_pb2, robot_state_pb2
+from bosdyn.api import trajectory_pb2, image_pb2, robot_state_pb2, local_grid_pb2
 
 from bosdyn.client.frame_helpers import get_a_tform_b, get_vision_tform_body, get_odom_tform_body,\
     BODY_FRAME_NAME, GRAV_ALIGNED_BODY_FRAME_NAME, VISION_FRAME_NAME, ODOM_FRAME_NAME 
@@ -92,6 +92,10 @@ class SpotInterface:
         # Client to request robot state
         self.robot_state_client = self.robot.ensure_client(
             RobotStateClient.default_service_name)
+
+        # Client to request local occupancy grid
+        self.local_grid_client = self.robot.ensure_client(LocalGridClient.default_service_name)
+        self.local_grid_types = self.local_grid_client.get_local_grid_types()
 
         # Spot requires a software estop to be activated.
         estop_client = self.robot.ensure_client(
@@ -460,6 +464,75 @@ class SpotInterface:
 
         return ks_msg, rs_msg  #kinematic_state, robot_state
 
+        ### For local_grid processing: from bosdyn basic_streaming_visualizer.py example
+    def get_terrain_grid(self, local_grid_proto):
+        """Generate a 3xN set of points representing the terrain local grid."""
+        cells_pz_full = self.unpack_grid(local_grid_proto).astype(np.float32)
+        # Populate the x,y values with a complete combination of all possible pairs for the dimensions in the grid extent.
+        ys, xs = np.mgrid[0:local_grid_proto.local_grid.extent.num_cells_x, 0:local_grid_proto.
+                        local_grid.extent.num_cells_y]
+        # Numpy vstack makes it so that each column is (x,y,z) for a single terrain point. The height values (z) come from the
+        # terrain grid's data field.
+        pts = np.vstack(
+            [np.ravel(xs).astype(np.float32),
+            np.ravel(ys).astype(np.float32), cells_pz_full]).T
+        pts[:, [0, 1]] *= (local_grid_proto.local_grid.extent.cell_size,
+                        local_grid_proto.local_grid.extent.cell_size)
+        return pts
+
+    def unpack_grid(self, local_grid_proto):
+        """Unpack the local grid proto."""
+        # Determine the data type for the bytes data.
+        data_type = self.get_numpy_data_type(local_grid_proto.local_grid)
+        if data_type is None:
+            print("Cannot determine the dataformat for the local grid.")
+            return None
+        # Decode the local grid.
+        if local_grid_proto.local_grid.encoding == local_grid_pb2.LocalGrid.ENCODING_RAW:
+            full_grid = np.fromstring(local_grid_proto.local_grid.data, dtype=data_type)
+        elif local_grid_proto.local_grid.encoding == local_grid_pb2.LocalGrid.ENCODING_RLE:
+            full_grid = self.expand_data_by_rle_count(local_grid_proto, data_type=data_type)
+        else:
+            # Return nothing if there is no encoding type set.
+            return None
+        # Apply the offset and scaling to the local grid.
+        if local_grid_proto.local_grid.cell_value_scale == 0:
+            return full_grid
+        full_grid_float = full_grid.astype(np.float64)
+        full_grid_float *= local_grid_proto.local_grid.cell_value_scale
+        full_grid_float += local_grid_proto.local_grid.cell_value_offset
+        return full_grid_float
+
+    def get_numpy_data_type(self, local_grid_proto):
+        """Convert the cell format of the local grid proto to a numpy data type."""
+        if local_grid_proto.cell_format == local_grid_pb2.LocalGrid.CELL_FORMAT_UINT16:
+            return np.uint16
+        elif local_grid_proto.cell_format == local_grid_pb2.LocalGrid.CELL_FORMAT_INT16:
+            return np.int16
+        elif local_grid_proto.cell_format == local_grid_pb2.LocalGrid.CELL_FORMAT_UINT8:
+            return np.uint8
+        elif local_grid_proto.cell_format == local_grid_pb2.LocalGrid.CELL_FORMAT_INT8:
+            return np.int8
+        elif local_grid_proto.cell_format == local_grid_pb2.LocalGrid.CELL_FORMAT_FLOAT64:
+            return np.float64
+        elif local_grid_proto.cell_format == local_grid_pb2.LocalGrid.CELL_FORMAT_FLOAT32:
+            return np.float32
+        else:
+            return None
+
+    def expand_data_by_rle_count(self, local_grid_proto, data_type=np.int16):
+        """Expand local grid data to full bytes data using the RLE count."""
+        cells_pz = np.fromstring(local_grid_proto.local_grid.data, dtype=data_type)
+        cells_pz_full = []
+        # For each value of rle_counts, we expand the cell data at the matching index
+        # to have that many repeated, consecutive values.
+        for i in range(0, len(local_grid_proto.local_grid.rle_counts)):
+            for j in range(0, local_grid_proto.local_grid.rle_counts[i]):
+                cells_pz_full.append(cells_pz[i])
+        return np.array(cells_pz_full)
+
+    ### End of: For local_grid processing
+
     def start_spot_ros_interface(self):
 
         # ROS Node initialization
@@ -546,15 +619,10 @@ class SpotInterface:
                     time.sleep(5)
                     print("calling it, hope it's standing")
                     time.sleep(1)
+                    
+                    #TODO: Check if self.local_grid_types is a list of all these grid types and replace hardcoded ones
                     proto = self.grid_client.get_local_grids(
                         ['terrain', 'terrain_valid', 'intensity', 'no_step', 'obstacle_distance'])
-                    print("ojferro")
-                    print(proto)
-                    file2 = open("./newwww_output_proto.txt","w+")
-                    file2.write(str(proto))
-                    file2.close()
-                    import time
-                    time.sleep(100)
 
                     rospy.logdebug("Looping...")
                     rate.sleep()
