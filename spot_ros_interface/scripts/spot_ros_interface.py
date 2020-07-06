@@ -7,6 +7,7 @@ import sys
 import os
 import subprocess
 import time
+import numpy as np
 import pdb # For debugging only
 
 # Bosdyn specific imports
@@ -30,6 +31,7 @@ import rospy
 import geometry_msgs.msg
 import std_msgs.msg
 import sensor_msgs.msg
+import visualization_msgs.msg
 import spot_ros_msgs.msg
 import spot_ros_srvs.srv
 
@@ -553,6 +555,9 @@ class SpotInterface:
             "kinematic_state", spot_ros_msgs.msg.KinematicState, queue_size=20)
         robot_state_pub = rospy.Publisher(
             "robot_state", spot_ros_msgs.msg.RobotState, queue_size=20)
+        
+        occ_grid_pub = rospy.Publisher(
+            "occupancy_grid", visualization_msgs.msg.MarkerArray, queue_size=20)
 
         # For RViz 3rd person POV visualization
         if self.third_person_view:
@@ -613,12 +618,7 @@ class SpotInterface:
                             image_capture.ko_tform_body = ko_tform_body
 
                             image_pub.publish(image_capture)
-                    
-                    print("going to call it")
-                    import time
-                    time.sleep(5)
-                    print("calling it, hope it's standing")
-                    time.sleep(1)
+                
                     
                     #TODO: Check if self.local_grid_types is a list of all these grid types and replace hardcoded ones
                     proto = self.grid_client.get_local_grids(
