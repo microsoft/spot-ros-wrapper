@@ -466,7 +466,49 @@ class SpotInterface:
 
         return ks_msg, rs_msg  #kinematic_state, robot_state
 
-        ### For local_grid processing: from bosdyn basic_streaming_visualizer.py example
+    ### For local_grid processing: from bosdyn basic_streaming_visualizer.py example
+    #TODO: Verify that get_terrain_grid returns [[x1,y1,z1], [x2,y2,z2], [x3,y3,z3], ...] (a list of lists, each of which is a point)
+    def get_terrain_marker_array(self, local_grid_proto):
+    '''Receives raw proto from self.grid_client.get_local_grids(...) and returns marker array msg'''
+        for local_grid in local_grid_proto:
+            if local_grid.local_grid_type_name == "terrain": #TODO: Support parsing the terrain_valid and the intensity fields in the proto
+                vision_tform_local_grid = get_a_tform_b(
+                    local_grid.local_grid.transforms_snapshot, VISION_FRAME_NAME,
+                    local_grid.local_grid.frame_name_local_grid_data).to_proto()
+                    
+                cell_size = local_grid.local_grid.extent.cell_size
+                terrain_pts = self.get_terrain_grid(local_grid)
+
+        # terrain_pts is [[x1,y1,z1], [x2,y2,z2], [x3,y3,z3], ...] (a list of lists, each of which is a point)
+        # in the correct relative pose to Spot's body
+        terrain_pts = offset_grid_pixels(terrain_pts, vision_tform_local_grid, cell_size)
+
+        # Parse terrain_pts into MarkerArray
+        marker_array = visualization_msgs.msg.MarkerArray()
+        marker = visualization_msgs.msg.Marker()
+        
+        #TODO: Verify that this is performant enough. Else, look into threading to parse terrain_pts concurrently
+        for terrain_pt in terrain_pts:
+            marker.header.seq=0
+            marker.header.stamp= rospy.Time()
+            marker.header.frame_id= VISION_FRAME_NAME #"base_link" #Must be map or another frame that exists (e.g. Spot's ko_frame)
+            marker.type = visualization_msgs.msg.Marker.CUBE
+            marker.action = visualization_msgs.msg.Marker.ADD
+            marker.pose.position.x = terrain_pt[0]
+            marker.pose.position.y = terrain_pt[1]
+            marker.pose.position.z = terrain_pt[2]
+            marker.scale.x = cell_size
+            marker.scale.y = cell_size
+            marker.scale.z = cell_size
+            marker.color.r = 1.0
+            marker.color.g = 0.5
+            marker.color.b = 0.5
+            marker.color.a = 1.0
+            
+            marker_array.markers.append(marker)
+            
+        return marker_array
+
     def get_terrain_grid(self, local_grid_proto):
         """Generate a 3xN set of points representing the terrain local grid."""
         cells_pz_full = self.unpack_grid(local_grid_proto).astype(np.float32)
@@ -532,6 +574,14 @@ class SpotInterface:
             for j in range(0, local_grid_proto.local_grid.rle_counts[i]):
                 cells_pz_full.append(cells_pz[i])
         return np.array(cells_pz_full)
+    
+    def offset_grid_pixels(self, pts, vision_tform_local_grid, cell_size):
+        """Offset the local grid's pixels to be in the world frame instead of the local grid frame."""
+        x_base = vision_tform_local_grid.position.x + cell_size * 0.5
+        y_base = vision_tform_local_grid.position.y + cell_size * 0.5
+        pts[:, 0] += x_base
+        pts[:, 1] += y_base
+        return pts
 
     ### End of: For local_grid processing
 
@@ -556,7 +606,7 @@ class SpotInterface:
         robot_state_pub = rospy.Publisher(
             "robot_state", spot_ros_msgs.msg.RobotState, queue_size=20)
         
-        occ_grid_pub = rospy.Publisher(
+        occupancy_grid_pub = rospy.Publisher(
             "occupancy_grid", visualization_msgs.msg.MarkerArray, queue_size=20)
 
         # For RViz 3rd person POV visualization
@@ -621,8 +671,10 @@ class SpotInterface:
                 
                     
                     #TODO: Check if self.local_grid_types is a list of all these grid types and replace hardcoded ones
-                    proto = self.grid_client.get_local_grids(
+                    local_grid_proto = self.grid_client.get_local_grids(
                         ['terrain', 'terrain_valid', 'intensity', 'no_step', 'obstacle_distance'])
+                    marker_array = self.get_terrain_marker_array(local_grid_proto)
+                    occupancy_grid_pub.publish(marker_array)
 
                     rospy.logdebug("Looping...")
                     rate.sleep()
