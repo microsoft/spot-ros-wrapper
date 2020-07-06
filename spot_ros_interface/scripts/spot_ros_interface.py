@@ -473,7 +473,7 @@ class SpotInterface:
 
         # ROS Node initialization
         rospy.init_node('spot_ros_interface_py')
-        rate = rospy.Rate(60)  # Update at 60 Hz
+        rate = rospy.Rate(200)  # Update at 60 Hz
 
         # Each service will handle a specific command to Spot instance
         rospy.Service("self_right_cmd", spot_ros_srvs.srv.Stand, self.self_right_cmd_srv)
@@ -492,6 +492,14 @@ class SpotInterface:
 
         image_only_pub = rospy.Publisher(
             "image", sensor_msgs.msg.Image, queue_size=20)
+
+        comp_img_pub = rospy.Publisher(
+            "compressed_image/compressed", sensor_msgs.msg.CompressedImage, queue_size=20) #topic must end in /compressed for rqt_image_viewer to work
+        
+        camera_transform_pub = rospy.Publisher(
+            "front_cam_transform", geometry_msgs.msg.TransformStamped, queue_size=20
+        )
+
         camera_info_pub = rospy.Publisher(
             "cam_info", sensor_msgs.msg.CameraInfo, queue_size=20)
 
@@ -545,11 +553,11 @@ class SpotInterface:
                     #     self.image_source_names)
 
                     # Debug only. Using imgs[2] only
-                    img_reqs = [image_pb2.ImageRequest(image_source_name=source, quality_percent=100, image_format=image_pb2.Image.FORMAT_RAW) for source in self.image_source_names[2:3]]
+                    img_reqs = [image_pb2.ImageRequest(image_source_name=source, quality_percent=95, image_format=image_pb2.Image.FORMAT_JPEG) for source in self.image_source_names[2:3]]
                     image_list = self.image_client.get_image(img_reqs)
                     # print(image_list)
 
-                    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                    # print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
                     for img in image_list:
                         if img.status == image_pb2.ImageResponse.STATUS_OK:
 
@@ -565,23 +573,29 @@ class SpotInterface:
                             else:
                                 dtype = np.uint8
                                 extension = ".jpg"
+                                # print("jpeg {}".format(type(img.shot.image.data)))
 
-                            image = np.fromstring(img.shot.image.data, dtype=dtype)
+                            # image = np.fromstring(img.shot.image.data, dtype=dtype)
+                            # print("jpeg {}".format(type(image.tobytes())))
                             if img.shot.image.format == image_pb2.Image.FORMAT_RAW:
                                 image = image.reshape(img.shot.image.rows, img.shot.image.cols)
                                 image = ndimage.rotate(image, -90)
-                                
-                            else:
-                                print("There has been an error. cv2 needed")
+                            # else:
+                            #     print("There has been an error. cv2 needed")
 
-                            # Make Image component of ImageCapture
+                            # # Make Image component of ImageCapture
                             i = sensor_msgs.msg.Image()
                             i.header = header
                             i.width = img.shot.image.rows#.cols
                             i.height = img.shot.image.cols#.rows
-                            i.data = image.tobytes()
+                            i.data = img.shot.image.data #image.tobytes()
                             i.step = img.shot.image.rows#.cols
                             i.encoding = 'mono8'
+
+                            comp_img = sensor_msgs.msg.CompressedImage()
+                            comp_img.header = header
+                            comp_img.format = 'jpeg' #TODO make it support png as well
+                            comp_img.data = img.shot.image.data
 
                             # CameraInfo
                             cam_info = sensor_msgs.msg.CameraInfo()
@@ -619,17 +633,26 @@ class SpotInterface:
                             ko_tform_body.rotation.z = cam_tform_world.rotation.z
                             ko_tform_body.rotation.w = cam_tform_world.rotation.w
 
-                            print("name: {} transform: {}".format(img.shot.frame_name_image_sensor, cam_tform_world))
+
+                            # camera_transform_stamped.header = ko_tform_body
+                            camera_transform_stamped = geometry_msgs.msg.TransformStamped()
+                            camera_transform_stamped.transform = ko_tform_body
+                            camera_transform_stamped.child_frame_id = img.source.name
+
+                            # # print("name: {} transform: {}".format(img.shot.frame_name_image_sensor, cam_tform_world))
                             
                             # Populate ImageCapture msg
-                            image_capture = spot_ros_msgs.msg.ImageCapture()
-                            image_capture.image = i
-                            image_capture.ko_tform_body = ko_tform_body
+                            # image_capture = spot_ros_msgs.msg.ImageCapture()
+                            # image_capture.image = i
+                            # image_capture.ko_tform_body = ko_tform_body
 
                             # Publish all
-                            image_pub.publish(image_capture)
-                            image_only_pub.publish(i)
+                            # image_pub.publish(image_capture)
+                            # image_only_pub.publish(i)
+
                             camera_info_pub.publish(cam_info)
+                            camera_transform_pub.publish(camera_transform_stamped)
+                            comp_img_pub.publish(comp_img)
 
                     rospy.logdebug("Looping...")
                     rate.sleep()
