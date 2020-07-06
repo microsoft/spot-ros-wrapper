@@ -20,7 +20,7 @@ rate = rospy.Rate(1)  # Update at 10hz
 
 def convert_np_list_to_marker_array(grid, tf_to_trf_cell):
     marker = visualization_msgs.msg.Marker()
-    marker_array = marker = visualization_msgs.msg.MarkerArray()
+    marker_array = visualization_msgs.msg.MarkerArray()
     
     # tf_to_trf_cell is the transform (just position) to the top right front cell
     # TODO: This
