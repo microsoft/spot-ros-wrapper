@@ -500,6 +500,7 @@ class SpotInterface:
             marker.scale.x = cell_size
             marker.scale.y = cell_size
             marker.scale.z = cell_size
+            #TODO: Arbitrary color for now, change this for 'intensity' when that is supported
             marker.color.r = 1.0
             marker.color.g = 0.5
             marker.color.b = 0.5
