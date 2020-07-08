@@ -195,6 +195,8 @@ rosrun spot_ros_interface keyboard_teleop.py
 ```
 and follow the instructions on screen.
 
+Ensure spot_ros_interface is running.
+
 *Note:* If Spot is in a faulty state and/or upside down, make sure to call the self-right command first (from the keyboard_teleop application, press "r").
 
 ### To run occupancy grid visualizer
