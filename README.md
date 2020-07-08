@@ -203,7 +203,7 @@ and follow the instructions on screen.
 roslaunch spot_urdf rviz_display.launch
 ```
 
-**Potential Issues:**
+Potential Issues:
 
 - Spot model is white and not oriented properly
     - Solution: Ensure spot_ros_interface and robot_state_publisher node are running (the latter should have started by the launch file).
