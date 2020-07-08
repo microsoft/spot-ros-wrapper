@@ -492,7 +492,7 @@ class SpotInterface:
             marker.header.seq=0
             marker.id=i
             marker.header.stamp= rospy.Time()
-            marker.header.frame_id= "base_link"#"base_link" #VISION_FRAME_NAME #Must be map or another frame that exists (e.g. Spot's ko_frame)
+            marker.header.frame_id= "vision_odometry_frame"#"base_link" #VISION_FRAME_NAME #Must be map or another frame that exists (e.g. Spot's ko_frame)
             marker.type = visualization_msgs.msg.Marker.CUBE
             marker.action = visualization_msgs.msg.Marker.ADD
             marker.pose.position.x = terrain_pt[0]
