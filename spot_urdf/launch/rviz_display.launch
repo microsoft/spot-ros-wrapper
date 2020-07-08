@@ -2,7 +2,7 @@
 
   <arg name="model" default="$(find spot_urdf)/urdf/spot.urdf"/>
   <arg name="gui" default="true" />
-  <arg name="rvizconfig" default="$(find spot_urdf)/rviz/urdf.rviz" />
+  <arg name="rvizconfig" default="$(find spot_urdf)/rviz/occupancy_grid_config.rviz" />
 
   <param name="robot_description" command="$(find xacro)/xacro.py $(arg model)" />
 
