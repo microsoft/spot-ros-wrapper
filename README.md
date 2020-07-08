@@ -199,8 +199,17 @@ and follow the instructions on screen.
 
 ### To run occupancy grid visualizer
 
-Install voxblox (ensure you specify ROS Melodic during installation, NOT ROS Kinetic): https://voxblox.readthedocs.io/en/latest/pages/Installation.html
+```
+roslaunch spot_urdf rviz_display.launch
+```
 
+**Potential Issues:**
+
+- Spot model is white and not oriented properly
+    - Solution: Ensure spot_ros_interface and robot_state_publisher node are running (the latter should have started by the launch file).
+
+- The occupancy grid is not being displayed:
+    - Solution: Ensure that RViz is set to display a Marker type msg (on the left-hand panel), and that it is subscribed to the `occupancy_grid` topic.
 
 # Contribute
 [ROS package guidelines](https://github.com/ethz-asl/mav_tools_public/wiki/How-to-Write-a-ROS-Package)
