@@ -35,7 +35,7 @@ import visualization_msgs.msg
 import spot_ros_msgs.msg
 import spot_ros_srvs.srv
 
-import tf2_py
+import tf2_ros 
 
 class SpotInterface:
     '''Callbacks for an instance of a Spot robot'''
@@ -611,9 +611,11 @@ class SpotInterface:
             "kinematic_state", spot_ros_msgs.msg.KinematicState, queue_size=20)
         robot_state_pub = rospy.Publisher(
             "robot_state", spot_ros_msgs.msg.RobotState, queue_size=20)
-        
         occupancy_grid_pub = rospy.Publisher(
             "occupancy_grid", visualization_msgs.msg.MarkerArray, queue_size=20)
+
+        # Publish tf2 from visual odometry frame to Spot's base link
+        spot_tf_broadcaster = tf2_ros.TransformBroadcaster()
 
         # For RViz 3rd person POV visualization
         if self.third_person_view:
@@ -639,7 +641,21 @@ class SpotInterface:
 
                     kinematic_state_pub.publish(kinematic_state)
                     robot_state_pub.publish(robot_state)
-                    
+
+                    t = geometry_msgs.msg.TransformStamped()
+                    t.header.stamp = rospy.Time.now()
+                    t.header.frame_id = "vision_odometry_frame"
+                    t.child_frame_id = "base_link"
+                    t.transform.translation.x = kinematic_state.vision_tform_body.translation.x
+                    t.transform.translation.y = kinematic_state.vision_tform_body.translation.y
+                    t.transform.translation.z = kinematic_state.vision_tform_body.translation.z
+                    t.transform.rotation.x = kinematic_state.vision_tform_body.rotation.x
+                    t.transform.rotation.y = kinematic_state.vision_tform_body.rotation.y
+                    t.transform.rotation.z = kinematic_state.vision_tform_body.rotation.z
+                    t.transform.rotation.w = kinematic_state.vision_tform_body.rotation.w
+
+                    spot_tf_broadcaster.sendTransform(t)
+                                        
                     if self.third_person_view:
                         joint_state_pub.publish(kinematic_state.joint_states)
 
