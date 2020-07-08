@@ -468,7 +468,7 @@ class SpotInterface:
         return ks_msg, rs_msg  #kinematic_state, robot_state
 
     ### For local_grid processing
-    def get_terrain_marker_array(self, local_grid_proto):
+    def get_terrain_markers(self, local_grid_proto):
         '''Receives raw proto from self.grid_client.get_local_grids(...) and returns marker array msg'''
         for local_grid in local_grid_proto:
             if local_grid.local_grid_type_name == "terrain": #TODO: Support parsing the terrain_valid and the intensity fields in the proto
@@ -508,14 +508,15 @@ class SpotInterface:
             p = geometry_msgs.msg.Point()
             c = std_msgs.msg.ColorRGBA()
 
+            # Cube location
             p.x = terrain_pt[0]
             p.y = terrain_pt[1]
             p.z = terrain_pt[2]
 
+            #Make color change with distance from Spot
             max_dist = math.sqrt(local_grid_proto[0].local_grid.extent.num_cells_x**2 + local_grid_proto[0].local_grid.extent.num_cells_y**2)/2.0 * local_grid_proto[0].local_grid.extent.cell_size
-            
             c.r = math.sqrt(p.x**2+p.y**2)/(max_dist+0.1)
-            c.g = 1 - math.sqrt(p.x**2+p.y**2)/(max_dist+0.1)
+            c.g = 1 - math.sqrt(p.x**2+p.y**2)/(max_dist)
             c.b = math.sqrt(p.x**2+p.y**2)/(max_dist+0.1)
             c.a = 1.0
 
@@ -651,6 +652,7 @@ class SpotInterface:
                     kinematic_state_pub.publish(kinematic_state)
                     robot_state_pub.publish(robot_state)
 
+                    # Publish tf2 from the fixed vision_odometry_frame to the Spot's base_link
                     t = geometry_msgs.msg.TransformStamped()
                     t.header.stamp = rospy.Time.now()
                     t.header.frame_id = "vision_odometry_frame"
@@ -704,8 +706,8 @@ class SpotInterface:
                     #TODO: Check if self.local_grid_types is a list of all these grid types and replace hardcoded ones
                     local_grid_proto = self.grid_client.get_local_grids(
                         ['terrain'])#, 'terrain_valid', 'intensity', 'no_step', 'obstacle_distance'])
-                    marker_array = self.get_terrain_marker_array(local_grid_proto)
-                    occupancy_grid_pub.publish(marker_array)
+                    markers = self.get_terrain_markers(local_grid_proto)
+                    occupancy_grid_pub.publish(markers)
 
                     rospy.logdebug("Looping...")
                     rate.sleep()
