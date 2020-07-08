@@ -467,7 +467,7 @@ class SpotInterface:
 
         return ks_msg, rs_msg  #kinematic_state, robot_state
 
-    ### For local_grid processing: from bosdyn basic_streaming_visualizer.py example
+    ### For local_grid processing
     def get_terrain_marker_array(self, local_grid_proto):
         '''Receives raw proto from self.grid_client.get_local_grids(...) and returns marker array msg'''
         for local_grid in local_grid_proto:
@@ -484,36 +484,45 @@ class SpotInterface:
         # in the correct relative pose to Spot's body
         terrain_pts = self.offset_grid_pixels(terrain_pts, vision_tform_local_grid, cell_size)
 
-        # Parse terrain_pts into MarkerArray
-        marker_array = visualization_msgs.msg.MarkerArray()
-        
+        # Parse terrain_pts into Marker (cube_list)
+        # Note: Using a single Marker of type CUBE_LIST allows for batch rendering, whereas MarkerArray of CUBEs does not
+        marker = visualization_msgs.msg.Marker()
+        marker.header.seq=0
+        marker.id=0
+        marker.header.stamp= rospy.Time()
+        marker.header.frame_id= "vision_odometry_frame" #Must be a frame that exists (e.g. Spot's vision_odometry_frame)
+        marker.type = visualization_msgs.msg.Marker.CUBE_LIST
+        marker.action = visualization_msgs.msg.Marker.ADD
+        marker.pose.position.x = 0
+        marker.pose.position.y = 0
+        marker.pose.position.z = 0
+        marker.pose.orientation.x = 0.0
+        marker.pose.orientation.y = 0.0
+        marker.pose.orientation.z = 0.0
+        marker.pose.orientation.w = 1.0
+        marker.scale.x = cell_size
+        marker.scale.y = cell_size
+        marker.scale.z = cell_size
+
         for i, terrain_pt in enumerate(terrain_pts):
-            marker = visualization_msgs.msg.Marker()
-            marker.header.seq=0
-            marker.id=i
-            marker.header.stamp= rospy.Time()
-            marker.header.frame_id= "vision_odometry_frame"#"base_link" #VISION_FRAME_NAME #Must be map or another frame that exists (e.g. Spot's ko_frame)
-            marker.type = visualization_msgs.msg.Marker.CUBE
-            marker.action = visualization_msgs.msg.Marker.ADD
-            marker.pose.position.x = terrain_pt[0]
-            marker.pose.position.y = terrain_pt[1]
-            marker.pose.position.z = terrain_pt[2]
-            marker.pose.orientation.x = 0.0
-            marker.pose.orientation.y = 0.0
-            marker.pose.orientation.z = 0.0
-            marker.pose.orientation.w = 1.0
-            marker.scale.x = cell_size
-            marker.scale.y = cell_size
-            marker.scale.z = cell_size
-            #TODO: Arbitrary color for now, change this for 'intensity' when that is supported
-            marker.color.r = 0.5
-            marker.color.g = 0.5
-            marker.color.b = 0.5
-            marker.color.a = 1.0
+            p = geometry_msgs.msg.Point()
+            c = std_msgs.msg.ColorRGBA()
+
+            p.x = terrain_pt[0]
+            p.y = terrain_pt[1]
+            p.z = terrain_pt[2]
+
+            max_dist = math.sqrt(local_grid_proto[0].local_grid.extent.num_cells_x**2 + local_grid_proto[0].local_grid.extent.num_cells_y**2)/2.0 * local_grid_proto[0].local_grid.extent.cell_size
             
-            marker_array.markers.append(marker)
+            c.r = math.sqrt(p.x**2+p.y**2)/(max_dist+0.1)
+            c.g = 1 - math.sqrt(p.x**2+p.y**2)/(max_dist+0.1)
+            c.b = math.sqrt(p.x**2+p.y**2)/(max_dist+0.1)
+            c.a = 1.0
+
+            marker.points.append(p)
+            marker.colors.append(c)
             
-        return marker_array
+        return marker
 
     def get_terrain_grid(self, local_grid_proto):
         """Generate a 3xN set of points representing the terrain local grid."""
@@ -612,7 +621,7 @@ class SpotInterface:
         robot_state_pub = rospy.Publisher(
             "robot_state", spot_ros_msgs.msg.RobotState, queue_size=20)
         occupancy_grid_pub = rospy.Publisher(
-            "occupancy_grid", visualization_msgs.msg.MarkerArray, queue_size=20)
+            "occupancy_grid", visualization_msgs.msg.Marker, queue_size=20)
 
         # Publish tf2 from visual odometry frame to Spot's base link
         spot_tf_broadcaster = tf2_ros.TransformBroadcaster()
