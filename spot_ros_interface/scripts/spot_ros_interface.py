@@ -79,9 +79,6 @@ class SpotInterface:
         self.command_client = self.robot.ensure_client(
             RobotCommandClient.default_service_name)
 
-        self.grid_client = self.robot.ensure_client(
-            LocalGridClient.default_service_name)
-
         # Client to request images from Spot
         self.image_client = self.robot.ensure_client(
             ImageClient.default_service_name)
@@ -99,8 +96,9 @@ class SpotInterface:
             RobotStateClient.default_service_name)
 
         # Client to request local occupancy grid
-        self.local_grid_client = self.robot.ensure_client(LocalGridClient.default_service_name)
-        self.local_grid_types = self.local_grid_client.get_local_grid_types()
+        self.grid_client = self.robot.ensure_client(
+            LocalGridClient.default_service_name)
+        self.local_grid_types = self.grid_client.get_local_grid_types()
 
         # Spot requires a software estop to be activated.
         estop_client = self.robot.ensure_client(
