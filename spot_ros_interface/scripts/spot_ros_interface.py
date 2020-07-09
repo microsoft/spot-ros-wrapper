@@ -553,7 +553,7 @@ class SpotInterface:
                     #     self.image_source_names)
 
                     # Debug only. Using imgs[2] only
-                    img_reqs = [image_pb2.ImageRequest(image_source_name=source, quality_percent=95, image_format=image_pb2.Image.FORMAT_JPEG) for source in self.image_source_names[2:3]]
+                    img_reqs = [image_pb2.ImageRequest(image_source_name=source, image_format=image_pb2.Image.FORMAT_RAW) for source in self.image_source_names[2:3]]
                     image_list = self.image_client.get_image(img_reqs)
                     # print(image_list)
 
@@ -575,27 +575,24 @@ class SpotInterface:
                                 extension = ".jpg"
                                 # print("jpeg {}".format(type(img.shot.image.data)))
 
-                            # image = np.fromstring(img.shot.image.data, dtype=dtype)
                             # print("jpeg {}".format(type(image.tobytes())))
                             if img.shot.image.format == image_pb2.Image.FORMAT_RAW:
+                                image = np.fromstring(img.shot.image.data, dtype=dtype)
                                 image = image.reshape(img.shot.image.rows, img.shot.image.cols)
-                                image = ndimage.rotate(image, -90)
-                            # else:
-                            #     print("There has been an error. cv2 needed")
 
                             # # Make Image component of ImageCapture
                             i = sensor_msgs.msg.Image()
                             i.header = header
-                            i.width = img.shot.image.rows#.cols
-                            i.height = img.shot.image.cols#.rows
-                            i.data = img.shot.image.data #image.tobytes()
-                            i.step = img.shot.image.rows#.cols
+                            i.width = img.shot.image.cols#.rows#.cols
+                            i.height = img.shot.image.rows#.cols#.rows
+                            i.data = img.shot.image.data if img.shot.image.format != image_pb2.Image.FORMAT_RAW else image.tobytes()
+                            i.step = img.shot.image.cols#.rows#.cols
                             i.encoding = 'mono8'
 
-                            comp_img = sensor_msgs.msg.CompressedImage()
-                            comp_img.header = header
-                            comp_img.format = 'jpeg' #TODO make it support png as well
-                            comp_img.data = img.shot.image.data
+                            # comp_img = sensor_msgs.msg.CompressedImage()
+                            # comp_img.header = header
+                            # comp_img.format = 'jpeg' #TODO make it support png as well
+                            # comp_img.data = img.shot.image.data
 
                             # CameraInfo
                             cam_info = sensor_msgs.msg.CameraInfo()
@@ -648,11 +645,11 @@ class SpotInterface:
 
                             # Publish all
                             # image_pub.publish(image_capture)
-                            # image_only_pub.publish(i)
+                            image_only_pub.publish(i)
 
                             camera_info_pub.publish(cam_info)
                             camera_transform_pub.publish(camera_transform_stamped)
-                            comp_img_pub.publish(comp_img)
+                            # comp_img_pub.publish(comp_img)
 
                     rospy.logdebug("Looping...")
                     rate.sleep()
