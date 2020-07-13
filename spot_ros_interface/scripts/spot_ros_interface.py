@@ -35,6 +35,7 @@ import sensor_msgs.msg
 import spot_ros_msgs.msg
 import spot_ros_srvs.srv
 
+import tf2_ros 
 
 class SpotInterface:
     '''Callbacks for an instance of a Spot robot'''
@@ -336,7 +337,7 @@ class SpotInterface:
                 d = diagnostic_msgs.msg.KeyValue()
                 d.key = key
                 d.value = robot_state.system_fault_state.aggregated[key]
-                rs_msg.system_fault_state.aggregated.append(d)
+                rs_msg.system_fault_state.aggregated = d
             # rs_msg.system_fault_state.aggregated.key = robot_state.system_fault_state.aggregated.key
             # rs_msg.system_fault_state.aggregated.value = robot_state.system_fault_state.aggregated.value
 
@@ -490,8 +491,12 @@ class SpotInterface:
         robot_state_pub = rospy.Publisher(
             "robot_state", spot_ros_msgs.msg.RobotState, queue_size=20)
 
+        # Publish tf2 from visual odometry frame to Spot's base link
+        spot_tf_broadcaster = tf2_ros.TransformBroadcaster()
+        spot_tf_static_broadcaster = tf2_ros.StaticTransformBroadcaster()
+
         image_only_pub = rospy.Publisher(
-            "image", sensor_msgs.msg.Image, queue_size=20)
+            "spot_image", sensor_msgs.msg.Image, queue_size=20)
 
         comp_img_pub = rospy.Publisher(
             "compressed_image/compressed", sensor_msgs.msg.CompressedImage, queue_size=20) #topic must end in /compressed for rqt_image_viewer to work
@@ -501,7 +506,7 @@ class SpotInterface:
         )
 
         camera_info_pub = rospy.Publisher(
-            "cam_info", sensor_msgs.msg.CameraInfo, queue_size=20)
+            "spot_cam_info", sensor_msgs.msg.CameraInfo, queue_size=20)
 
         # For RViz 3rd person POV visualization
         if self.third_person_view:
@@ -531,6 +536,20 @@ class SpotInterface:
                     kinematic_state_pub.publish(kinematic_state)
                     robot_state_pub.publish(robot_state)
                     
+                    # Publish tf2 from the fixed vision_odometry_frame to the Spot's base_link
+                    t = geometry_msgs.msg.TransformStamped()
+                    t.header.stamp = rospy.Time.now()
+                    t.header.frame_id = "vision_odometry_frame"
+                    t.child_frame_id = "base_link"
+                    t.transform.translation.x = kinematic_state.vision_tform_body.translation.x
+                    t.transform.translation.y = kinematic_state.vision_tform_body.translation.y
+                    t.transform.translation.z = kinematic_state.vision_tform_body.translation.z
+                    t.transform.rotation.x = kinematic_state.vision_tform_body.rotation.x
+                    t.transform.rotation.y = kinematic_state.vision_tform_body.rotation.y
+                    t.transform.rotation.z = kinematic_state.vision_tform_body.rotation.z
+                    t.transform.rotation.w = kinematic_state.vision_tform_body.rotation.w
+                    spot_tf_broadcaster.sendTransform(t)
+
                     if self.third_person_view:
                         # The following is to add the base_link of spot to the joint states msg
                         # So that the rviz visualization moves when the robot moves
@@ -622,19 +641,22 @@ class SpotInterface:
                             
                             cam_tform_world = world_tform_body * body_tform_cam
                             
-                            ko_tform_body.translation.x = cam_tform_world.position.x
-                            ko_tform_body.translation.y = cam_tform_world.position.y
-                            ko_tform_body.translation.z = cam_tform_world.position.z
-                            ko_tform_body.rotation.x = cam_tform_world.rotation.x
-                            ko_tform_body.rotation.y = cam_tform_world.rotation.y
-                            ko_tform_body.rotation.z = cam_tform_world.rotation.z
-                            ko_tform_body.rotation.w = cam_tform_world.rotation.w
+                            ko_tform_body.translation.x = body_tform_cam.position.x
+                            ko_tform_body.translation.y = body_tform_cam.position.y
+                            ko_tform_body.translation.z = body_tform_cam.position.z
+                            ko_tform_body.rotation.x = body_tform_cam.rotation.x
+                            ko_tform_body.rotation.y = body_tform_cam.rotation.y
+                            ko_tform_body.rotation.z = body_tform_cam.rotation.z
+                            ko_tform_body.rotation.w = body_tform_cam.rotation.w
 
 
                             # camera_transform_stamped.header = ko_tform_body
                             camera_transform_stamped = geometry_msgs.msg.TransformStamped()
+                            camera_transform_stamped.header.stamp = header.stamp
+                            camera_transform_stamped.header.frame_id = "base_link"
                             camera_transform_stamped.transform = ko_tform_body
                             camera_transform_stamped.child_frame_id = img.source.name
+                            # print()
 
                             # # print("name: {} transform: {}".format(img.shot.frame_name_image_sensor, cam_tform_world))
                             
@@ -648,7 +670,11 @@ class SpotInterface:
                             image_only_pub.publish(i)
 
                             camera_info_pub.publish(cam_info)
-                            camera_transform_pub.publish(camera_transform_stamped)
+                            
+                            #Reuse broadcaster to send camera transform to vision odom frame
+                            # spot_tf_broadcaster.sendTransform(camera_transform_stamped)
+                            spot_tf_static_broadcaster.sendTransform(camera_transform_stamped)
+                            # camera_transform_pub.publish(camera_transform_stamped)
                             # comp_img_pub.publish(comp_img)
 
                     rospy.logdebug("Looping...")
