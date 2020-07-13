@@ -537,18 +537,18 @@ class SpotInterface:
                     robot_state_pub.publish(robot_state)
                     
                     # Publish tf2 from the fixed vision_odometry_frame to the Spot's base_link
-                    t = geometry_msgs.msg.TransformStamped()
-                    t.header.stamp = rospy.Time.now()
-                    t.header.frame_id = "vision_odometry_frame"
-                    t.child_frame_id = "base_link"
-                    t.transform.translation.x = kinematic_state.vision_tform_body.translation.x
-                    t.transform.translation.y = kinematic_state.vision_tform_body.translation.y
-                    t.transform.translation.z = kinematic_state.vision_tform_body.translation.z
-                    t.transform.rotation.x = kinematic_state.vision_tform_body.rotation.x
-                    t.transform.rotation.y = kinematic_state.vision_tform_body.rotation.y
-                    t.transform.rotation.z = kinematic_state.vision_tform_body.rotation.z
-                    t.transform.rotation.w = kinematic_state.vision_tform_body.rotation.w
-                    spot_tf_broadcaster.sendTransform(t)
+                    # t = geometry_msgs.msg.TransformStamped()
+                    # t.header.stamp = rospy.Time.now()
+                    # t.header.frame_id = "vision_odometry_frame"
+                    # t.child_frame_id = "base_link"
+                    # t.transform.translation.x = kinematic_state.vision_tform_body.translation.x
+                    # t.transform.translation.y = kinematic_state.vision_tform_body.translation.y
+                    # t.transform.translation.z = kinematic_state.vision_tform_body.translation.z
+                    # t.transform.rotation.x = kinematic_state.vision_tform_body.rotation.x
+                    # t.transform.rotation.y = kinematic_state.vision_tform_body.rotation.y
+                    # t.transform.rotation.z = kinematic_state.vision_tform_body.rotation.z
+                    # t.transform.rotation.w = kinematic_state.vision_tform_body.rotation.w
+                    # spot_tf_broadcaster.sendTransform(t)
 
                     if self.third_person_view:
                         # The following is to add the base_link of spot to the joint states msg
@@ -607,6 +607,13 @@ class SpotInterface:
                             i.data = img.shot.image.data if img.shot.image.format != image_pb2.Image.FORMAT_RAW else image.tobytes()
                             i.step = img.shot.image.cols#.rows#.cols
                             i.encoding = 'mono8'
+                            # print("##########################")
+                            # print("##########################")
+                            # print("##########################")
+                            # print(img.shot.transforms_snapshot)
+                            # print("&&&&&&&&&&&&&&&&&&&&&&&&&&")
+                            # print("&&&&&&&&&&&&&&&&&&&&&&&&&&")
+                            # print("&&&&&&&&&&&&&&&&&&&&&&&&&&")
 
                             # comp_img = sensor_msgs.msg.CompressedImage()
                             # comp_img.header = header
@@ -640,6 +647,18 @@ class SpotInterface:
                                 BODY_FRAME_NAME)
                             
                             cam_tform_world = world_tform_body * body_tform_cam
+
+                            cam_tform_world_tf = geometry_msgs.msg.TransformStamped()
+                            cam_tform_world_tf.header.stamp = header.stamp
+                            cam_tform_world_tf.header.frame_id = "vision_odometry_frame"
+                            cam_tform_world_tf.child_frame_id = img.source.name
+                            cam_tform_world_tf.transform.translation.x = cam_tform_world.position.x
+                            cam_tform_world_tf.transform.translation.y = cam_tform_world.position.y
+                            cam_tform_world_tf.transform.translation.z = cam_tform_world.position.z
+                            cam_tform_world_tf.transform.rotation.x = cam_tform_world.rotation.x
+                            cam_tform_world_tf.transform.rotation.y = cam_tform_world.rotation.y
+                            cam_tform_world_tf.transform.rotation.z = cam_tform_world.rotation.z
+                            cam_tform_world_tf.transform.rotation.w = cam_tform_world.rotation.w
                             
                             ko_tform_body.translation.x = body_tform_cam.position.x
                             ko_tform_body.translation.y = body_tform_cam.position.y
@@ -673,7 +692,8 @@ class SpotInterface:
                             
                             #Reuse broadcaster to send camera transform to vision odom frame
                             # spot_tf_broadcaster.sendTransform(camera_transform_stamped)
-                            spot_tf_static_broadcaster.sendTransform(camera_transform_stamped)
+                            # spot_tf_static_broadcaster.sendTransform(camera_transform_stamped)
+                            spot_tf_broadcaster.sendTransform(cam_tform_world_tf)
                             # camera_transform_pub.publish(camera_transform_stamped)
                             # comp_img_pub.publish(comp_img)
 
