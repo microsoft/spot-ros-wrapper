@@ -571,10 +571,11 @@ class SpotInterface:
                 
                     
                     #TODO: Check if self.local_grid_types is a list of all these grid types and replace hardcoded ones
-                    local_grid_proto = self.grid_client.get_local_grids(
-                        ['terrain'])#, 'terrain_valid', 'intensity', 'no_step', 'obstacle_distance'])
-                    markers = get_terrain_markers(local_grid_proto)
-                    occupancy_grid_pub.publish(markers)
+                    if occupancy_grid_pub.get_num_connections() > 0:
+                        local_grid_proto = self.grid_client.get_local_grids(
+                            ['terrain'])#, 'terrain_valid', 'intensity', 'no_step', 'obstacle_distance'])
+                        markers = get_terrain_markers(local_grid_proto)
+                        occupancy_grid_pub.publish(markers)
 
                     rospy.logdebug("Looping...")
                     rate.sleep()
