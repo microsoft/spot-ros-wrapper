@@ -56,7 +56,7 @@ class SpotInterface:
             with open(os.devnull, 'wb') as devnull:
                 resp = subprocess.check_call(['ping', '-c', '1', config.hostname], stdout=devnull, stderr=subprocess.STDOUT)
                 if resp != 0:
-                    print ("ERROR: Cannot detect a Spot with IP: {}.\n Make sure Spot is powered on and on the same network".format(config.hostname))
+                    print ("ERROR: Cannot detect a Spot with IP: {}.\nMake sure Spot is powered on and on the same network".format(config.hostname))
                     sys.exit()
         except:
             print("ERROR: Cannot detect a Spot with IP: {}.\n Make sure Spot is powered on and on the same network".format(config.hostname))
@@ -116,8 +116,12 @@ class SpotInterface:
             print("ERROR: Lease cannot be acquired. Ensure no other client has the lease. Shutting down.")
             print(err)
             sys.exit()
+            
         # True for RViz visualization of Spot in 3rd person with occupancy grid
         self.third_person_view = True
+
+        # Power on motors
+        self.motors_on = config.motors_on.lower()!="n"
 
     ### Callback functions ###
 
@@ -476,7 +480,7 @@ class SpotInterface:
 
         # ROS Node initialization
         rospy.init_node('spot_ros_interface_py')
-        rate = rospy.Rate(60)  # Update at 60 Hz
+        rate = rospy.Rate(200)  # Update at 60 Hz
 
         # Each service will handle a specific command to Spot instance
         rospy.Service("self_right_cmd", spot_ros_srvs.srv.Stand, self.self_right_cmd_srv)
@@ -498,6 +502,23 @@ class SpotInterface:
         # Publish tf2 from visual odometry frame to Spot's base link
         spot_tf_broadcaster = tf2_ros.TransformBroadcaster()
 
+        # Publish tf2 from visual odometry frame to Spot's base link
+        spot_tf_broadcaster = tf2_ros.TransformBroadcaster()
+        spot_tf_static_broadcaster = tf2_ros.StaticTransformBroadcaster()
+
+        image_only_pub = rospy.Publisher(
+            "spot_image", sensor_msgs.msg.Image, queue_size=20)
+
+        comp_img_pub = rospy.Publisher(
+            "compressed_image/compressed", sensor_msgs.msg.CompressedImage, queue_size=20) #topic must end in /compressed for rqt_image_viewer to work
+        
+        camera_transform_pub = rospy.Publisher(
+            "front_cam_transform", geometry_msgs.msg.TransformStamped, queue_size=20
+        )
+
+        camera_info_pub = rospy.Publisher(
+            "spot_cam_info", sensor_msgs.msg.CameraInfo, queue_size=20)
+
         # For RViz 3rd person POV visualization
         if self.third_person_view:
             joint_state_pub = rospy.Publisher(
@@ -510,10 +531,13 @@ class SpotInterface:
             with bosdyn.client.lease.LeaseKeepAlive(self.lease_client), bosdyn.client.estop.EstopKeepAlive(
                     self.estop_endpoint):
                 rospy.loginfo("Acquired lease")
-                rospy.loginfo("Powering on robot... This may take a several seconds.")
-                self.robot.power_on(timeout_sec=20)
-                assert self.robot.is_powered_on(), "Robot power on failed."
-                rospy.loginfo("Robot powered on.")
+                if self.motors_on:
+                    rospy.loginfo("Powering on robot... This may take a several seconds.")
+                    self.robot.power_on(timeout_sec=20)
+                    assert self.robot.is_powered_on(), "Robot power on failed."
+                    rospy.loginfo("Robot powered on.")
+                else:
+                    rospy.loginfo("Not powering on robot, continuing")
 
                 while not rospy.is_shutdown():
                     ''' Publish Robot State'''
@@ -521,65 +545,167 @@ class SpotInterface:
 
                     kinematic_state_pub.publish(kinematic_state)
                     robot_state_pub.publish(robot_state)
+                    
+                    # Publish tf2 from the fixed vision_odometry_frame to the Spot's base_link
+                    # t = geometry_msgs.msg.TransformStamped()
+                    # t.header.stamp = rospy.Time.now()
+                    # t.header.frame_id = "vision_odometry_frame"
+                    # t.child_frame_id = "base_link"
+                    # t.transform.translation.x = kinematic_state.vision_tform_body.translation.x
+                    # t.transform.translation.y = kinematic_state.vision_tform_body.translation.y
+                    # t.transform.translation.z = kinematic_state.vision_tform_body.translation.z
+                    # t.transform.rotation.x = kinematic_state.vision_tform_body.rotation.x
+                    # t.transform.rotation.y = kinematic_state.vision_tform_body.rotation.y
+                    # t.transform.rotation.z = kinematic_state.vision_tform_body.rotation.z
+                    # t.transform.rotation.w = kinematic_state.vision_tform_body.rotation.w
+                    # spot_tf_broadcaster.sendTransform(t)
 
-                    ''' Publish tf2 from the fixed vision_odometry_frame to the Spot's base_link '''
-                    t = geometry_msgs.msg.TransformStamped()
-                    t.header.stamp = rospy.Time.now()
-                    t.header.frame_id = "vision_odometry_frame"
-                    t.child_frame_id = "base_link"
-                    t.transform.translation.x = kinematic_state.vision_tform_body.translation.x
-                    t.transform.translation.y = kinematic_state.vision_tform_body.translation.y
-                    t.transform.translation.z = kinematic_state.vision_tform_body.translation.z
-                    t.transform.rotation.x = kinematic_state.vision_tform_body.rotation.x
-                    t.transform.rotation.y = kinematic_state.vision_tform_body.rotation.y
-                    t.transform.rotation.z = kinematic_state.vision_tform_body.rotation.z
-                    t.transform.rotation.w = kinematic_state.vision_tform_body.rotation.w
-
-                    spot_tf_broadcaster.sendTransform(t)
-                                        
                     if self.third_person_view:
+                        # The following is to add the base_link of spot to the joint states msg
+                        # So that the rviz visualization moves when the robot moves
+
+                        # js = kinematic_state.joint_states
+                        # js.name.append('base_link')
+                        # # [DoubleValue] Note: angle in rad
+                        # js.position.append(joint_state.position.value)
+                        # # [DoubleValue] Note: ang vel
+                        # js.velocity.append(joint_state.velocity.value)
+                        # #[DoubleValue] Note: ang accel. JointState doesn't have accel. Ignoring for now.
+                        # # js.acc(joint_state.acceleration)
+                        # # [DoubleValue] Note: Torque in N-m
+                        # js.effort.append(joint_state.load.value)
                         joint_state_pub.publish(kinematic_state.joint_states)
 
                     ''' Publish Images'''
-                    if image_pub.get_num_connections() > 0:
-                        # Each element in image_response list is an image from each one of the sensors
-                        image_list = self.image_client.get_image_from_sources(
-                            self.image_source_names)
+                    # Each element in image_response list is an image from each one of the sensors
+                    # image_list = self.image_client.get_image_from_sources(
+                    #     self.image_source_names)
 
-                        for img in image_list:
-                            if not img.status == image_pb2.ImageResponse.STATUS_OK:
+                    # Debug only. Using imgs[2] only
+                    img_reqs = [image_pb2.ImageRequest(image_source_name=source, image_format=image_pb2.Image.FORMAT_RAW) for source in self.image_source_names[2:3]]
+                    image_list = self.image_client.get_image(img_reqs)
+                    # print(image_list)
 
-                                header = std_msgs.msg.Header()
-                                header.stamp.secs = img.shot.sample.acquisition_time.seconds
-                                header.stamp.nsecs = img.shot.sample.acquisition_time.nanos
-                                header.frame_id = img.source.name
+                    # print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                    for img in image_list:
+                        if img.status == image_pb2.ImageResponse.STATUS_OK:
 
-                                # Make Image component of ImageCapture
-                                i = sensor_msgs.msg.Image()
-                                i.header = header
-                                i.width = img.shot.image.cols
-                                i.height = img.shot.image.rows
-                                i.data = img.shot.image.data
-                                
-                                # Make Transform component of ImageCapture
-                                ko_tform_body = geometry_msgs.msg.Transform()
-                                ko_tform_body.translation = img.ko_tform_body.position
-                                ko_tform_body.rotation = img.ko_tform_body.rotation
-                                
-                                # Populate ImageCapture msg
-                                image_capture = spot_ros_msgs.msg.ImageCapture()
-                                image_capture.image = i
-                                image_capture.ko_tform_body = ko_tform_body
+                            header = std_msgs.msg.Header()
+                            header.stamp.secs = img.shot.acquisition_time.seconds
+                            header.stamp.nsecs = img.shot.acquisition_time.nanos
+                            header.frame_id = img.source.name
 
-                                image_pub.publish(image_capture)
-                
-                    ''' Publish occupancy grid'''
-                    #TODO: Check if self.local_grid_types is a list of all these grid types and replace hardcoded ones
-                    if occupancy_grid_pub.get_num_connections() > 0:
-                        local_grid_proto = self.grid_client.get_local_grids(
-                            ['terrain'])#, 'terrain_valid', 'intensity', 'no_step', 'obstacle_distance'])
-                        markers = get_terrain_markers(local_grid_proto)
-                        occupancy_grid_pub.publish(markers)
+                            # From BD example
+                            if img.shot.image.pixel_format == image_pb2.Image.PIXEL_FORMAT_DEPTH_U16:
+                                dtype = np.uint16
+                                extension = ".png"
+                            else:
+                                dtype = np.uint8
+                                extension = ".jpg"
+                                # print("jpeg {}".format(type(img.shot.image.data)))
+
+                            # print("jpeg {}".format(type(image.tobytes())))
+                            if img.shot.image.format == image_pb2.Image.FORMAT_RAW:
+                                image = np.fromstring(img.shot.image.data, dtype=dtype)
+                                image = image.reshape(img.shot.image.rows, img.shot.image.cols)
+
+                            # # Make Image component of ImageCapture
+                            i = sensor_msgs.msg.Image()
+                            i.header = header
+                            i.width = img.shot.image.cols#.rows#.cols
+                            i.height = img.shot.image.rows#.cols#.rows
+                            i.data = img.shot.image.data if img.shot.image.format != image_pb2.Image.FORMAT_RAW else image.tobytes()
+                            i.step = img.shot.image.cols#.rows#.cols
+                            i.encoding = 'mono8'
+                            # print("##########################")
+                            # print("##########################")
+                            # print("##########################")
+                            # print(img.shot.transforms_snapshot)
+                            # print("&&&&&&&&&&&&&&&&&&&&&&&&&&")
+                            # print("&&&&&&&&&&&&&&&&&&&&&&&&&&")
+                            # print("&&&&&&&&&&&&&&&&&&&&&&&&&&")
+
+                            # comp_img = sensor_msgs.msg.CompressedImage()
+                            # comp_img.header = header
+                            # comp_img.format = 'jpeg' #TODO make it support png as well
+                            # comp_img.data = img.shot.image.data
+
+                            # CameraInfo
+                            cam_info = sensor_msgs.msg.CameraInfo()
+                            cam_info.header = i.header
+                            cam_info.width = i.width
+                            cam_info.height = i.height
+                            # cam_info.distortion_model = "plumb_bob"
+                            # cam_info.D = [0.0,0.0,0.0,0.0]
+                            f = img.source.pinhole.intrinsics.focal_length
+                            c = img.source.pinhole.intrinsics.principal_point
+                            cam_info.K = \
+                                [f.x, 0, c.x,  \
+                                0, f.y, c.y,   \
+                                0,   0,  1]
+
+                            # print(img.source)
+
+                            # Make Transform component of ImageCapture
+                            ko_tform_body = geometry_msgs.msg.Transform()
+                            
+                            body_tform_cam = get_a_tform_b(img.shot.transforms_snapshot,
+                                BODY_FRAME_NAME,
+                                img.shot.frame_name_image_sensor)
+                            world_tform_body = get_a_tform_b(img.shot.transforms_snapshot,
+                                VISION_FRAME_NAME,
+                                BODY_FRAME_NAME)
+                            
+                            cam_tform_world = world_tform_body * body_tform_cam
+
+                            cam_tform_world_tf = geometry_msgs.msg.TransformStamped()
+                            cam_tform_world_tf.header.stamp = header.stamp
+                            cam_tform_world_tf.header.frame_id = "vision_odometry_frame"
+                            cam_tform_world_tf.child_frame_id = img.source.name
+                            cam_tform_world_tf.transform.translation.x = cam_tform_world.position.x
+                            cam_tform_world_tf.transform.translation.y = cam_tform_world.position.y
+                            cam_tform_world_tf.transform.translation.z = cam_tform_world.position.z
+                            cam_tform_world_tf.transform.rotation.x = cam_tform_world.rotation.x
+                            cam_tform_world_tf.transform.rotation.y = cam_tform_world.rotation.y
+                            cam_tform_world_tf.transform.rotation.z = cam_tform_world.rotation.z
+                            cam_tform_world_tf.transform.rotation.w = cam_tform_world.rotation.w
+                            
+                            ko_tform_body.translation.x = body_tform_cam.position.x
+                            ko_tform_body.translation.y = body_tform_cam.position.y
+                            ko_tform_body.translation.z = body_tform_cam.position.z
+                            ko_tform_body.rotation.x = body_tform_cam.rotation.x
+                            ko_tform_body.rotation.y = body_tform_cam.rotation.y
+                            ko_tform_body.rotation.z = body_tform_cam.rotation.z
+                            ko_tform_body.rotation.w = body_tform_cam.rotation.w
+
+
+                            # camera_transform_stamped.header = ko_tform_body
+                            camera_transform_stamped = geometry_msgs.msg.TransformStamped()
+                            camera_transform_stamped.header.stamp = header.stamp
+                            camera_transform_stamped.header.frame_id = "base_link"
+                            camera_transform_stamped.transform = ko_tform_body
+                            camera_transform_stamped.child_frame_id = img.source.name
+                            # print()
+
+                            # # print("name: {} transform: {}".format(img.shot.frame_name_image_sensor, cam_tform_world))
+                            
+                            # Populate ImageCapture msg
+                            # image_capture = spot_ros_msgs.msg.ImageCapture()
+                            # image_capture.image = i
+                            # image_capture.ko_tform_body = ko_tform_body
+
+                            # Publish all
+                            # image_pub.publish(image_capture)
+                            image_only_pub.publish(i)
+
+                            camera_info_pub.publish(cam_info)
+                            
+                            #Reuse broadcaster to send camera transform to vision odom frame
+                            # spot_tf_broadcaster.sendTransform(camera_transform_stamped)
+                            # spot_tf_static_broadcaster.sendTransform(camera_transform_stamped)
+                            spot_tf_broadcaster.sendTransform(cam_tform_world_tf)
+                            # camera_transform_pub.publish(camera_transform_stamped)
+                            # comp_img_pub.publish(comp_img)
 
                     rospy.logdebug("Looping...")
                     rate.sleep()
@@ -592,6 +718,7 @@ if __name__ == '__main__':
     """Command line interface."""
     parser = argparse.ArgumentParser()
     bosdyn.client.util.add_common_arguments(parser)
+    parser.add_argument('--motors_on', help='Power on motors [Y/n]', default="Y")
     options = parser.parse_args(sys.argv[1:])
     try:
         robot = SpotInterface(options)
