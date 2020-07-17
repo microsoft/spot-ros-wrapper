@@ -27,6 +27,7 @@ from bosdyn.client.frame_helpers import get_a_tform_b, get_vision_tform_body, ge
 
 # ROS specific imports
 import rospy
+import diagnostic_msgs.msg
 import geometry_msgs.msg
 import std_msgs.msg
 import sensor_msgs.msg
@@ -334,8 +335,12 @@ class SpotInterface:
 
         #[map<string,enum>]
         if robot_state.system_fault_state.aggregated:
-            rs_msg.system_fault_state.aggregated.key = robot_state.system_fault_state.aggregated.key
-            rs_msg.system_fault_state.aggregated.value = robot_state.system_fault_state.aggregated.value
+            for key, value in robot_state.system_fault_state.aggregated.items():
+                # TODO: Test this
+                kv = diagnostic_msgs.msg.KeyValue()
+                kv.key = key
+                kv.value = value
+                rs_msg.system_fault_state.aggregated.append(kv)
 
         ### EStopState conversion [repeated field]
         for estop_state in robot_state.estop_states:
