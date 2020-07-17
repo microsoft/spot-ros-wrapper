@@ -7,7 +7,7 @@ import sys
 import os
 import subprocess
 import time
-import pdb # For debugging only
+import numpy as np
 
 # Bosdyn specific imports
 import bosdyn.client
@@ -19,19 +19,25 @@ import bosdyn.geometry
 from bosdyn.client.image import ImageClient
 from bosdyn.client.robot_command import RobotCommandBuilder, RobotCommandClient
 from bosdyn.client.robot_state import RobotStateClient
-from bosdyn.api import trajectory_pb2, image_pb2, robot_state_pb2
+from bosdyn.client.local_grid import LocalGridClient
+from bosdyn.api import trajectory_pb2, image_pb2, robot_state_pb2, local_grid_pb2
 
 from bosdyn.client.frame_helpers import get_a_tform_b, get_vision_tform_body, get_odom_tform_body,\
     BODY_FRAME_NAME, GRAV_ALIGNED_BODY_FRAME_NAME, VISION_FRAME_NAME, ODOM_FRAME_NAME 
 
 # ROS specific imports
 import rospy
+import diagnostic_msgs.msg
 import geometry_msgs.msg
 import std_msgs.msg
 import sensor_msgs.msg
+import visualization_msgs.msg
 import spot_ros_msgs.msg
 import spot_ros_srvs.srv
 
+import tf2_ros 
+
+from grid_utils import get_terrain_markers
 
 class SpotInterface:
     '''Callbacks for an instance of a Spot robot'''
@@ -88,6 +94,11 @@ class SpotInterface:
         # Client to request robot state
         self.robot_state_client = self.robot.ensure_client(
             RobotStateClient.default_service_name)
+
+        # Client to request local occupancy grid
+        self.grid_client = self.robot.ensure_client(
+            LocalGridClient.default_service_name)
+        self.local_grid_types = self.grid_client.get_local_grid_types()
 
         # Spot requires a software estop to be activated.
         estop_client = self.robot.ensure_client(
@@ -324,8 +335,12 @@ class SpotInterface:
 
         #[map<string,enum>]
         if robot_state.system_fault_state.aggregated:
-            rs_msg.system_fault_state.aggregated.key = robot_state.system_fault_state.aggregated.key
-            rs_msg.system_fault_state.aggregated.value = robot_state.system_fault_state.aggregated.value
+            for key, value in robot_state.system_fault_state.aggregated.items():
+                # TODO: Test this
+                kv = diagnostic_msgs.msg.KeyValue()
+                kv.key = key
+                kv.value = value
+                rs_msg.system_fault_state.aggregated.append(kv)
 
         ### EStopState conversion [repeated field]
         for estop_state in robot_state.estop_states:
@@ -455,6 +470,7 @@ class SpotInterface:
         
 
         return ks_msg, rs_msg  #kinematic_state, robot_state
+    
 
     def start_spot_ros_interface(self):
 
@@ -476,6 +492,11 @@ class SpotInterface:
             "kinematic_state", spot_ros_msgs.msg.KinematicState, queue_size=20)
         robot_state_pub = rospy.Publisher(
             "robot_state", spot_ros_msgs.msg.RobotState, queue_size=20)
+        occupancy_grid_pub = rospy.Publisher(
+            "occupancy_grid", visualization_msgs.msg.Marker, queue_size=20)
+
+        # Publish tf2 from visual odometry frame to Spot's base link
+        spot_tf_broadcaster = tf2_ros.TransformBroadcaster()
 
         # For RViz 3rd person POV visualization
         if self.third_person_view:
@@ -496,46 +517,69 @@ class SpotInterface:
 
                 while not rospy.is_shutdown():
                     ''' Publish Robot State'''
-                    # pdb.set_trace()
                     kinematic_state, robot_state = self.get_robot_state()
 
                     kinematic_state_pub.publish(kinematic_state)
                     robot_state_pub.publish(robot_state)
-                    
+
+                    ''' Publish tf2 from the fixed vision_odometry_frame to the Spot's base_link '''
+                    t = geometry_msgs.msg.TransformStamped()
+                    t.header.stamp = rospy.Time.now()
+                    t.header.frame_id = "vision_odometry_frame"
+                    t.child_frame_id = "base_link"
+                    t.transform.translation.x = kinematic_state.vision_tform_body.translation.x
+                    t.transform.translation.y = kinematic_state.vision_tform_body.translation.y
+                    t.transform.translation.z = kinematic_state.vision_tform_body.translation.z
+                    t.transform.rotation.x = kinematic_state.vision_tform_body.rotation.x
+                    t.transform.rotation.y = kinematic_state.vision_tform_body.rotation.y
+                    t.transform.rotation.z = kinematic_state.vision_tform_body.rotation.z
+                    t.transform.rotation.w = kinematic_state.vision_tform_body.rotation.w
+
+                    spot_tf_broadcaster.sendTransform(t)
+                                        
                     if self.third_person_view:
                         joint_state_pub.publish(kinematic_state.joint_states)
 
                     ''' Publish Images'''
-                    # Each element in image_response list is an image from each one of the sensors
-                    image_list = self.image_client.get_image_from_sources(
-                        self.image_source_names)
+                    if image_pub.get_num_connections() > 0:
+                        # Each element in image_response list is an image from each one of the sensors
+                        image_list = self.image_client.get_image_from_sources(
+                            self.image_source_names)
 
-                    for img in image_list:
-                        if not img.status == image_pb2.ImageResponse.STATUS_OK:
+                        for img in image_list:
+                            if not img.status == image_pb2.ImageResponse.STATUS_OK:
 
-                            header = std_msgs.msg.Header()
-                            header.stamp.secs = img.shot.sample.acquisition_time.seconds
-                            header.stamp.nsecs = img.shot.sample.acquisition_time.nanos
-                            header.frame_id = img.source.name
+                                header = std_msgs.msg.Header()
+                                header.stamp.secs = img.shot.sample.acquisition_time.seconds
+                                header.stamp.nsecs = img.shot.sample.acquisition_time.nanos
+                                header.frame_id = img.source.name
 
-                            # Make Image component of ImageCapture
-                            i = sensor_msgs.msg.Image()
-                            i.header = header
-                            i.width = img.shot.image.cols
-                            i.height = img.shot.image.rows
-                            i.data = img.shot.image.data
-                            
-                            # Make Transform component of ImageCapture
-                            ko_tform_body = geometry_msgs.msg.Transform()
-                            ko_tform_body.translation = img.ko_tform_body.position
-                            ko_tform_body.rotation = img.ko_tform_body.rotation
-                            
-                            # Populate ImageCapture msg
-                            image_capture = spot_ros_msgs.msg.ImageCapture()
-                            image_capture.image = i
-                            image_capture.ko_tform_body = ko_tform_body
+                                # Make Image component of ImageCapture
+                                i = sensor_msgs.msg.Image()
+                                i.header = header
+                                i.width = img.shot.image.cols
+                                i.height = img.shot.image.rows
+                                i.data = img.shot.image.data
+                                
+                                # Make Transform component of ImageCapture
+                                ko_tform_body = geometry_msgs.msg.Transform()
+                                ko_tform_body.translation = img.ko_tform_body.position
+                                ko_tform_body.rotation = img.ko_tform_body.rotation
+                                
+                                # Populate ImageCapture msg
+                                image_capture = spot_ros_msgs.msg.ImageCapture()
+                                image_capture.image = i
+                                image_capture.ko_tform_body = ko_tform_body
 
-                            image_pub.publish(image_capture)
+                                image_pub.publish(image_capture)
+                
+                    ''' Publish occupancy grid'''
+                    #TODO: Check if self.local_grid_types is a list of all these grid types and replace hardcoded ones
+                    if occupancy_grid_pub.get_num_connections() > 0:
+                        local_grid_proto = self.grid_client.get_local_grids(
+                            ['terrain'])#, 'terrain_valid', 'intensity', 'no_step', 'obstacle_distance'])
+                        markers = get_terrain_markers(local_grid_proto)
+                        occupancy_grid_pub.publish(markers)
 
                     rospy.logdebug("Looping...")
                     rate.sleep()
