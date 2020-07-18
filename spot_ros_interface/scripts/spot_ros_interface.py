@@ -368,6 +368,7 @@ class SpotInterface:
 
         '''joint_states is repeated'''
         js = sensor_msgs.msg.JointState()
+        js.header.stamp = ks_msg.header.stamp
         for joint_state in robot_state.kinematic_state.joint_states:
             # [string]
             js.name.append(joint_state.name)
@@ -591,8 +592,7 @@ class SpotInterface:
                         if img.status == image_pb2.ImageResponse.STATUS_OK:
 
                             header = std_msgs.msg.Header()
-                            header.stamp.secs = img.shot.acquisition_time.seconds
-                            header.stamp.nsecs = img.shot.acquisition_time.nanos
+                            header.stamp = t.header.stamp
                             header.frame_id = img.source.name
 
                             # From BD example
@@ -709,7 +709,7 @@ class SpotInterface:
                             
                             #Reuse broadcaster to send camera transform to vision odom frame
                             # spot_tf_broadcaster.sendTransform(camera_transform_stamped)
-                            # spot_tf_static_broadcaster.sendTransform(camera_transform_stamped)
+                            spot_tf_static_broadcaster.sendTransform(camera_transform_stamped)
                             # cam_tf_broadcaster.sendTransform(cam_tform_world_tf)
                             # camera_transform_pub.publish(camera_transform_stamped)
                             # comp_img_pub.publish(comp_img)
