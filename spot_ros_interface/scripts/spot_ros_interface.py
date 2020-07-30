@@ -481,7 +481,7 @@ class SpotInterface:
 
         # ROS Node initialization
         rospy.init_node('spot_ros_interface_py')
-        rate = rospy.Rate(200)  # Update at 60 Hz
+        rate = rospy.Rate(200)  # Update at 200 Hz
 
         # Each service will handle a specific command to Spot instance
         rospy.Service("self_right_cmd", spot_ros_srvs.srv.Stand, self.self_right_cmd_srv)
