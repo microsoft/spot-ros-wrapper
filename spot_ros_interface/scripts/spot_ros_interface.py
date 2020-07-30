@@ -599,9 +599,8 @@ class SpotInterface:
                             cam_info.header = i.header
                             cam_info.width = i.width
                             cam_info.height = i.height
-                            # TODO distortion params
-                            # cam_info.distortion_model = "plumb_bob"
-                            # cam_info.D = [0.0,0.0,0.0,0.0]
+                            cam_info.distortion_model = "plumb_bob"
+                            cam_info.D = [0.0,0.0,0.0,0.0]
                             f = img.source.pinhole.intrinsics.focal_length
                             c = img.source.pinhole.intrinsics.principal_point
                             cam_info.K = \
