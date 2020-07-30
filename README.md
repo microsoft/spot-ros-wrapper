@@ -13,57 +13,20 @@ The [spot_ros_interface](./spot_ros_interface/README.md) ROS package provides a 
 # Getting Started
 ## 1.	Installation process
 
-#### 1.1 Set up WSL (Ubuntu 18.04):
+#### 1.1 Set up WSL (Ubuntu 20.04):
 https://docs.microsoft.com/en-us/windows/wsl/install-win10
 
-#### 1.2 Set up virtual environment (Recommended):
-
-Install python3-venv:
-```
-sudo apt install python3-venv
-```
-Create virtual env with python3 as the default version and activate it:
-```
-# Create venv called spot_venv
-virtualenv -p python3 $HOME/tmp/spot_venv/
-
-# Activate the venv
-source /home/$USER/tmp/$1/bin/activate
-```
-*Note:* you will have to activate the virtual environment in every terminal you open. For simplicity, run the following to append the some helper functions to your .bashrc:
-```
-echo "
-# Must pass in name of venv as the only positional arg
-activate_venv(){
-        source /home/\$USER/tmp/\$1/bin/activate
-}
-# Must pass in name of venv as the only postional arg
-create_venv(){
-        virtualenv -p python3 \$HOME/tmp/\$1/
-}
-alias ls_venv='ls /home/\$USER/tmp/'
-" >> ~/.bashrc
-```
-
-To activate your environment, now call `activate_venv spot_venv`
-
-To list all your virtual environments, call `ls_venv`
-
-To create a new environment, call `create_venv <name_of_env>`
-
-.
-
-#### 1.3 Download and install Spot SDK:
+#### 1.2 Download and install Spot SDK (in WSL environment):
 https://github.com/boston-dynamics/spot-sdk/blob/master/docs/python/quickstart.md#getting-the-code
 
-#### 1.4 Set up app token to allow communication with Spot:
+#### 1.3 Set up app token to allow communication with Spot:
 
 Copy token from `~/ms_robotics_spot/src/docs/tokens/dev.app_token` to the default location ~/.bosdyn/dev.app_token:
 ```
 cp ~/ms_robotics_spot/src/docs/tokens/dev.app_token ~/.bosdyn
 ```
 
-#### 1.5 Set up ROS Melodic in WSL:
+#### 1.4 Set up ROS Noetic in WSL:
 - Configure your Ubuntu repositories to allow "restricted," "universe," and "multiverse". Follow instructions [here](https://help.ubuntu.com/community/Repositories/CommandLine).
 Remember to `sudo apt-get update` after this.
 
@@ -100,7 +63,7 @@ You should now be able to re-run the key setup command above.
 - Install
 ```
 sudo apt update
-sudo apt install ros-melodic-desktop-full
+sudo apt install ros-noetic-desktop-full
 ```
 This will take some time. Go grab a coffee :coffee:.
 
@@ -113,7 +76,7 @@ To automatically source it whenever you open a new terminal, add it to your .bas
 echo "source /opt/ros/melodic/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 ```
-*Note:* You will have to re-activate your virtual environment after sourcing your .bashrc
+*Note:* If you were in a virtual environment, you will have to re-activate your virtual environment after sourcing your .bashrc
 
 
 To verify the installation, run `roscore` in the terminal. This should start a roslaunch server without any errors. Feel free to kill the server (Ctrl+C) now.
@@ -132,7 +95,8 @@ chmod +x install_dependencies.sh
 Now, go to your catkin workspace directory (e.g. `~/ms_robotics_spot`) and setup your catkin workspace:
 ```
 cd ~/ms_robotics_spot
-catkin init
+catkin config --init --merge-devel --cmake-args -DCMAKE_BUILD_TYPE=Release
+catkin config --extend /opt/ros/noetic
 ```
 
 *Note:* The structure of a catkin workspace must be as follows. For more info on catkin workspaces and packages, consult the [tutorials](http://wiki.ros.org/catkin/workspaces).
@@ -161,7 +125,7 @@ cd ~/ms_robotics_spot
 catkin build
 ```
 
-After the build finishes, you must source the environment. This must be done every time after building.
+After the build finishes, you must source the environment. **This must be done every time after building.**
 ```
 source ~/ms_robotics_spot/devel/setup.bash
 ```
@@ -183,19 +147,19 @@ And finally, let us start the ROS Wrapper node:
 ```
 rosrun spot_ros_interface  spot_ros_interface.py --username USERNAME --password PASSWORD  192.168.80.3
 ```
-*Note:* Spot's default IP address is 192.168.80.3
+*Note:* Spot's default IP address is 192.168.80.3 over WiFi, and 10.0.0.3 over ethernet.
 
-*Note:* You must be able to ping Spot's IP addess in order to communicate. The easiest way to do so is to connect to Spot's Wi-Fi hotspot directly. For more information, reference Spot's instruction manuals on ways to communicate.
+*Note:* You must be able to ping Spot's IP addess in order to communicate. The easiest way to do so is to connect to Spot's Wi-Fi hotspot directly, or to its ethernet port. For more information, reference Spot's instruction manuals on ways to communicate.
 
 ### Controlling Spot from your keyboard
 
-With the ROS wrapper running, open a new terminal and run keyboard_teleop.py in the spot_ros_interface ROS package:
+With the ROS wrapper running, open a new terminal and run `keyboard_teleop.py` in the `spot_ros_interface` ROS package:
 ```
 rosrun spot_ros_interface keyboard_teleop.py
 ```
 and follow the instructions on screen.
 
-Ensure spot_ros_interface is running.
+Ensure `spot_ros_interface.py` is running.
 
 *Note:* If Spot is in a faulty state and/or upside down, make sure to call the self-right command first (from the keyboard_teleop application, press "r").
 
@@ -207,8 +171,8 @@ roslaunch spot_urdf rviz_display.launch
 
 Potential Issues:
 
-- Spot model is white and not oriented properly
-    - Solution: Ensure spot_ros_interface and robot_state_publisher node are running (the latter should have started by the launch file).
+- Spot model RViz visualization is white and not oriented properly
+    - Solution: Ensure spot_ros_interface and robot_state_publisher nodes are running (the latter should have started by the rvis_display.launch file).
 
 - The occupancy grid is not being displayed:
     - Solution: Ensure that RViz is set to display a Marker type msg (on the left-hand panel), and that it is subscribed to the `occupancy_grid` topic.
