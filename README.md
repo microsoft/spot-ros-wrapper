@@ -1,10 +1,6 @@
 		
 # Introduction 
-Enable human-robot controls by untrained operators through Mixed Reality Devices & Services.
-
-- Mixed Reality Devices: Build intuitive control of the robot and facilitation of human robot collaboration through HoloLens2 (Gaze, Gesture, Voice) and other mobile Mixed Reality devices, thus enabling humans and robots to work together.
-
-- Mixed Reality Services: Build co-localization and shared environmental understanding capabilities, enabling multi-robot control in a shared coordinate system.
+Enable programmatic control of the Boston Dynamic Spot robot through the Robot Operating System http://ros.org interface. 
 
 # Overview
 
