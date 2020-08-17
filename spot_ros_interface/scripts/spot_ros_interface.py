@@ -16,6 +16,7 @@ import bosdyn.client.lease
 import bosdyn.client.util
 import bosdyn.geometry
 
+from bosdyn.client import math_helpers
 from bosdyn.client.image import ImageClient
 from bosdyn.client.robot_command import RobotCommandBuilder, RobotCommandClient
 from bosdyn.client.robot_state import RobotStateClient
@@ -44,7 +45,7 @@ class SpotInterface:
 
     # 0.6 s is the standard duration for cmds in boston dynamics Spot examples
     VELOCITY_CMD_DURATION = 0.6  # [seconds]
-    TRAJECTORY_CMD_TIMEOUT = 30  # [seconds] If None, go-to command will never time out
+    TRAJECTORY_CMD_TIMEOUT = 20.0  # [seconds]
     x_goal_tolerance = 0.05 #[m]
     y_goal_tolerance = 0.05 #[m]
     angle_goal_tolerance = 0.075 #[rad]
@@ -59,7 +60,7 @@ class SpotInterface:
                     print ("ERROR: Cannot detect a Spot with IP: {}.\nMake sure Spot is powered on and on the same network".format(config.hostname))
                     sys.exit()
         except:
-            print("ERROR: Cannot detect a Spot with IP: {}.\n Make sure Spot is powered on and on the same network".format(config.hostname))
+            print("ERROR: Cannot detect a Spot with IP: {}.\nMake sure Spot is powered on and on the same network".format(config.hostname))
             sys.exit()
 
         # Set up SDK
@@ -136,7 +137,10 @@ class SpotInterface:
     def stand_cmd_srv(self, stand):
         """Callback that sends stand cmd at a given height delta [m] from standard configuration"""
 
-        cmd = RobotCommandBuilder.stand_command(body_height=stand.body_pose.translation.z, footprint_R_body=self.quat_to_euler(stand.body_pose.rotation))
+        cmd = RobotCommandBuilder.stand_command(
+            body_height=stand.body_pose.translation.z,
+            footprint_R_body=self.quat_to_euler(stand.body_pose.rotation)
+            )
         ret = self.command_client.robot_command(cmd)
         rospy.loginfo("Robot stand cmd sent. {}".format(ret))
 
@@ -150,24 +154,23 @@ class SpotInterface:
         The trajectory must be expressed in a gravity aligned frame, so either "vision", "odom", or "flat_body".
         Any other provided se2_frame_name will be rejected and the trajectory command will not be exectuted.
         '''
-        # TODO: Support other reference frames (currently only body ref. frame)
+        # TODO: Support other reference frames (currently only VISION ref. frame)
 
-        for pose in trajectory:
+        for pose in trajectory.waypoints.poses:
             x = pose.position.x
             y = pose.position.y
-            heading = self.quat_to_euler(pose.orientation)[2]
-            frame = GRAV_ALIGNED_BODY_FRAME_NAME
+            heading = math.atan2(y,x)
+            frame = VISION_FRAME_NAME
 
             cmd = RobotCommandBuilder.trajectory_command(
                 goal_x=x,
                 goal_y=y,
                 goal_heading=heading,
-                frame=frame,
+                frame_name=frame,
             )
-            reached_goal = self.block_until_pose_reached(cmd, (x,y,heading))
-            rospy.loginfo("Waypoint: ({},{},{}). Waypoint reached: {}".format(x,y,heading, reached_goal))
-
-        robot_state = self.get_robot_state()[0].ko_tform_body
+            self.command_client.robot_command(lease=None, command=cmd, end_time_secs=time.time() + self.TRAJECTORY_CMD_TIMEOUT)
+            
+        robot_state = self.get_robot_state()[0].vision_tform_body
         final_pose = geometry_msgs.msg.Pose()
         final_pose.position = robot_state.translation
         final_pose.orientation = robot_state.rotation
@@ -186,7 +189,7 @@ class SpotInterface:
             v_y=v_y,
             v_rot=v_rot
         )
-        # Issue command to robot
+
         self.command_client.robot_command(
             cmd,
             end_time_secs=time.time() + self.VELOCITY_CMD_DURATION
@@ -194,13 +197,13 @@ class SpotInterface:
         rospy.loginfo(
             "Robot velocity cmd sent: v_x=${},v_y=${},v_rot${}".format(v_x, v_y, v_rot))
         return []
+
     ### Helper functions ###
 
     def block_until_pose_reached(self, cmd, goal):
         """Do not return until goal waypoint is reached, or TRAJECTORY_CMD_TIMEOUT is reached."""
         # TODO: Make trajectory_cmd_timeout part of the service request
         
-        # Issue command to robot
         self.command_client.robot_command(
             cmd,
             end_time_secs = time.time()+self.TRAJECTORY_CMD_TIMEOUT if self.TRAJECTORY_CMD_TIMEOUT else None
@@ -218,10 +221,10 @@ class SpotInterface:
         goal_x=goal[0]
         goal_y=goal[1]
         goal_heading=goal[2]
-        robot_state = self.get_robot_state()[0].ko_tform_body
+        robot_state = self.get_robot_state()[0].vision_tform_body
         robot_pose = robot_state.translation
         robot_angle = self.quat_to_euler((robot_state.rotation.x, robot_state.rotation.y,
-                                          robot_state.rotation.z, robot_state.rotation.w))[2]
+                                          robot_state.rotation.z, robot_state.rotation.w)).yaw
 
         x_dist = abs(goal_x - robot_pose.x)
         y_dist = abs(goal_y - robot_pose.y)
@@ -259,8 +262,7 @@ class SpotInterface:
         robot_state = self.robot_state_client.get_robot_state()
         rs_msg = spot_ros_msgs.msg.RobotState()
         
-        ### PowerState conversion
-        #[google.protobuf.Timestamp]
+        ''' PowerState conversion '''
         rs_msg.power_state.header.stamp.secs =  robot_state.power_state.timestamp.seconds
         rs_msg.power_state.header.stamp.nsecs =  robot_state.power_state.timestamp.nanos
         rs_msg.power_state.motor_power_state = robot_state.power_state.motor_power_state #[enum]
@@ -268,12 +270,11 @@ class SpotInterface:
         rs_msg.power_state.locomotion_charge_percentage = robot_state.power_state.locomotion_charge_percentage.value #[google.protobuf.DoubleValue]
         rs_msg.power_state.locomotion_estimated_runtime.secs = robot_state.power_state.locomotion_estimated_runtime.seconds #[google.protobuf.Duration]
 
-        ### BatteryState conversion [repeated field] 
+        ''' BatteryState conversion [repeated field] ''' 
         for battery_state in robot_state.battery_states:
             battery_state_msg = sensor_msgs.msg.BatteryState()
 
             header = std_msgs.msg.Header()
-            #[google.protobuf.Timestamp]
             header.stamp.secs = battery_state.timestamp.seconds
             header.stamp.nsecs = battery_state.timestamp.nanos
             header.frame_id = battery_state.identifier #[string]
@@ -285,13 +286,12 @@ class SpotInterface:
             battery_state_msg.charge = battery_state.estimated_runtime.seconds #[google.protobuf.Duration]
             battery_state_msg.current = battery_state.current.value #[DoubleValue]
             battery_state_msg.voltage = battery_state.voltage.value #[DoubleValue]
-            # NOTE: Ignoring temperatures for now; no field in BatteryState maps directly to it
-            # battery_state_msg. = battery_state.temperatures #[repeated - Double]
+            # NOTE: Ignoring battery_state.temperatures for now; no field in BatteryState maps directly to it
             battery_state_msg.power_supply_status = battery_state.status #[enum]
 
             rs_msg.battery_states.append(battery_state_msg)
 
-        ### CommsState conversion [repeated field]
+        ''' CommsState conversion [repeated field] '''
         for comms_state in robot_state.comms_states:
             comms_state_msg = spot_ros_msgs.msg.CommsState()
 
@@ -302,8 +302,8 @@ class SpotInterface:
 
             rs_msg.comms_states.append(comms_state_msg)
 
-        ### SystemFaultState conversion
-        '''faults is Repeated'''
+        ''' SystemFaultState conversion '''
+        ### faults is Repeated ###
         for fault in robot_state.system_fault_state.faults:
             system_fault_msg = spot_ros_msgs.msg.SystemFault()
 
@@ -320,7 +320,7 @@ class SpotInterface:
 
             rs_msg.system_fault_state.faults.append(system_fault_msg)
 
-        '''historical_faults is Repeated'''
+        ### historical_faults is Repeated ###
         for historical_fault in robot_state.system_fault_state.faults:
             system_fault_msg = spot_ros_msgs.msg.SystemFault()
 
@@ -340,13 +340,12 @@ class SpotInterface:
         #[map<string,enum>]
         if robot_state.system_fault_state.aggregated:
             for key, value in robot_state.system_fault_state.aggregated.items():
-                # TODO: Test this
                 kv = diagnostic_msgs.msg.KeyValue()
                 kv.key = key
                 kv.value = value
                 rs_msg.system_fault_state.aggregated.append(kv)
 
-        ### EStopState conversion [repeated field]
+        ''' EStopState conversion [repeated field] '''
         for estop_state in robot_state.estop_states:
             estop_msg = spot_ros_msgs.msg.EStopState()
 
@@ -359,93 +358,65 @@ class SpotInterface:
 
             rs_msg.estop_states.append(estop_msg)
 
-        ### KinematicState conversion
+        ''' KinematicState conversion '''
         ks_msg = spot_ros_msgs.msg.KinematicState()
 
-        # [google.protobuf.Timestamp]
         ks_msg.header.stamp.secs = robot_state.kinematic_state.acquisition_timestamp.seconds
         ks_msg.header.stamp.nsecs = robot_state.kinematic_state.acquisition_timestamp.nanos
 
-        '''joint_states is repeated'''
+        ### joint_states is repeated ###
         js = sensor_msgs.msg.JointState()
         js.header.stamp = ks_msg.header.stamp
         for joint_state in robot_state.kinematic_state.joint_states:
-            # [string]
-            js.name.append(joint_state.name)
-            # [DoubleValue] Note: angle in rad
-            js.position.append(joint_state.position.value)
-            # [DoubleValue] Note: ang vel
-            js.velocity.append(joint_state.velocity.value)
-            #[DoubleValue] Note: ang accel. JointState doesn't have accel. Ignoring for now.
-            # js.acc(joint_state.acceleration)
-            # [DoubleValue] Note: Torque in N-m
-            js.effort.append(joint_state.load.value)
+            js.name.append(joint_state.name) # [string]
+            js.position.append(joint_state.position.value) # Note: angle in rad
+            js.velocity.append(joint_state.velocity.value) # Note: ang vel
+            # NOTE: ang accel. JointState doesn't have accel. Ignoring joint_state.acceleration for now.
+            js.effort.append(joint_state.load.value) # Note: Torque in N-m
+
         ks_msg.joint_states = js
 
-        ''' vision_tform_body'''
         # SE3Pose representing transform of Spot's Body frame relative to the inertial Vision frame
         vision_tform_body = get_vision_tform_body(robot_state.kinematic_state.transforms_snapshot)
 
-        # [double]
         ks_msg.vision_tform_body.translation.x = vision_tform_body.x
-        # [double]
         ks_msg.vision_tform_body.translation.y = vision_tform_body.y
-        # [double]
         ks_msg.vision_tform_body.translation.z = vision_tform_body.z
-        # [double]
+
         ks_msg.vision_tform_body.rotation.x = vision_tform_body.rot.x
-        # [double]
         ks_msg.vision_tform_body.rotation.y = vision_tform_body.rot.y
-        # [double]
         ks_msg.vision_tform_body.rotation.z = vision_tform_body.rot.z
-        # [double]
         ks_msg.vision_tform_body.rotation.w = vision_tform_body.rot.w
 
-        ''' odom_tform_body '''
-        # SE3Pose representing transform of Spot's Body frame relative to the inertial Vision frame
+        # odom_tform_body: SE3Pose representing transform of Spot's Body frame relative to the odometry frame
         odom_tform_body = get_odom_tform_body(robot_state.kinematic_state.transforms_snapshot)
 
-        # [double]
         ks_msg.odom_tform_body.translation.x = odom_tform_body.x
-        # [double]
         ks_msg.odom_tform_body.translation.y = odom_tform_body.y
-        # [double]
         ks_msg.odom_tform_body.translation.z = odom_tform_body.z
-        # [double]
+
         ks_msg.odom_tform_body.rotation.x = odom_tform_body.rot.x
-        # [double]
         ks_msg.odom_tform_body.rotation.y = odom_tform_body.rot.y
-        # [double]
         ks_msg.odom_tform_body.rotation.z = odom_tform_body.rot.z
-        # [double]
         ks_msg.odom_tform_body.rotation.w = odom_tform_body.rot.w
 
         ''' velocity_of_body_in_vision '''
-        # [double]
         ks_msg.velocity_of_body_in_vision.linear.x = robot_state.kinematic_state.velocity_of_body_in_vision.linear.x
-        # [double]
         ks_msg.velocity_of_body_in_vision.linear.y = robot_state.kinematic_state.velocity_of_body_in_vision.linear.y
-        # [double]
         ks_msg.velocity_of_body_in_vision.linear.z = robot_state.kinematic_state.velocity_of_body_in_vision.linear.z
-        # [double]
+
         ks_msg.velocity_of_body_in_vision.angular.x = robot_state.kinematic_state.velocity_of_body_in_vision.angular.x
-        # [double]
         ks_msg.velocity_of_body_in_vision.angular.y = robot_state.kinematic_state.velocity_of_body_in_vision.angular.y
-        # [double]
         ks_msg.velocity_of_body_in_vision.angular.z = robot_state.kinematic_state.velocity_of_body_in_vision.angular.z
 
         ''' velocity_of_body_in_odom '''
-        # [double]
+
         ks_msg.velocity_of_body_in_odom.linear.x = robot_state.kinematic_state.velocity_of_body_in_odom.linear.x
-        # [double]
         ks_msg.velocity_of_body_in_odom.linear.y = robot_state.kinematic_state.velocity_of_body_in_odom.linear.y
-        # [double]
         ks_msg.velocity_of_body_in_odom.linear.z = robot_state.kinematic_state.velocity_of_body_in_odom.linear.z
-        # [double]
+
         ks_msg.velocity_of_body_in_odom.angular.x = robot_state.kinematic_state.velocity_of_body_in_odom.angular.x
-        # [double]
         ks_msg.velocity_of_body_in_odom.angular.y = robot_state.kinematic_state.velocity_of_body_in_odom.angular.y
-        # [double]
         ks_msg.velocity_of_body_in_odom.angular.z = robot_state.kinematic_state.velocity_of_body_in_odom.angular.z
 
 
@@ -474,7 +445,7 @@ class SpotInterface:
             rs_msg.foot_states.append(foot_state_msg)
         
 
-        return ks_msg, rs_msg  #kinematic_state, robot_state
+        return ks_msg, rs_msg  #kinematic state message, robot state message
     
 
     def start_spot_ros_interface(self):
@@ -486,8 +457,7 @@ class SpotInterface:
         # Each service will handle a specific command to Spot instance
         rospy.Service("self_right_cmd", spot_ros_srvs.srv.Stand, self.self_right_cmd_srv)
         rospy.Service("stand_cmd", spot_ros_srvs.srv.Stand, self.stand_cmd_srv)
-        rospy.Service("trajectory_cmd",
-                      spot_ros_srvs.srv.Trajectory, self.trajectory_cmd_srv)
+        rospy.Service("trajectory_cmd", spot_ros_srvs.srv.Trajectory, self.trajectory_cmd_srv)
         rospy.Service("velocity_cmd", spot_ros_srvs.srv.Velocity, self.velocity_cmd_srv)
 
         # Single image publisher will publish all images from all Spot cameras
@@ -501,30 +471,23 @@ class SpotInterface:
         # Publish tf2 from visual odometry frame to Spot's base link
         spot_tf_broadcaster = tf2_ros.TransformBroadcaster()
 
-        # Publish tf2 from visual odometry frame to Spot's base link
+        # Publish static tf2 from Spot's base link to front-left camera
         spot_tf_static_broadcaster = tf2_ros.StaticTransformBroadcaster()
 
         image_only_pub = rospy.Publisher(
             "spot_image", sensor_msgs.msg.Image, queue_size=20)
 
-        comp_img_pub = rospy.Publisher(
-            "compressed_image/compressed", sensor_msgs.msg.CompressedImage, queue_size=20) #topic must end in /compressed for rqt_image_viewer to work
-        
-        camera_transform_pub = rospy.Publisher(
-            "front_cam_transform", geometry_msgs.msg.TransformStamped, queue_size=20
-        )
-
         camera_info_pub = rospy.Publisher(
             "spot_cam_info", sensor_msgs.msg.CameraInfo, queue_size=20)
+
+        # TODO: Publish depth images
+        # depth_image_pub = rospy.Publisher(
+        #     "depth_image", sensor_msgs.msg.Image, queue_size=20)
 
         # For RViz 3rd person POV visualization
         if self.third_person_view:
             joint_state_pub = rospy.Publisher(
                 "joint_state_from_spot", sensor_msgs.msg.JointState, queue_size=20)
-
-        # TODO: Publish depth images
-        # depth_image_pub = rospy.Publisher(
-        #     "depth_image", sensor_msgs.msg.Image, queue_size=20) # TODO: Publish depth imgs
 
         try:
             with bosdyn.client.lease.LeaseKeepAlive(self.lease_client), bosdyn.client.estop.EstopKeepAlive(
@@ -563,9 +526,8 @@ class SpotInterface:
                         joint_state_pub.publish(kinematic_state.joint_states)
 
                     ''' Publish Images'''
-                    # Each element in image_response list is an image from each one of the sensors
-                    image_list = self.image_client.get_image_from_sources(
-                        [image_pb2.ImageRequest(image_source_name=self.image_source_names[2], image_format=image_pb2.Image.FORMAT_RAW)])
+                    img_reqs = [image_pb2.ImageRequest(image_source_name=source, image_format=image_pb2.Image.FORMAT_RAW) for source in self.image_source_names[2:3]]
+                    image_list = self.image_client.get_image(img_reqs)
 
                     for img in image_list:
                         if img.status == image_pb2.ImageResponse.STATUS_OK:
@@ -576,16 +538,14 @@ class SpotInterface:
 
                             if img.shot.image.pixel_format == image_pb2.Image.PIXEL_FORMAT_DEPTH_U16:
                                 dtype = np.uint16
-                                extension = ".png"
                             else:
                                 dtype = np.uint8
-                                extension = ".jpg"
 
                             if img.shot.image.format == image_pb2.Image.FORMAT_RAW:
                                 image = np.fromstring(img.shot.image.data, dtype=dtype)
                                 image = image.reshape(img.shot.image.rows, img.shot.image.cols)
 
-                            # # Make Image component of ImageCapture
+                            # Make Image component of ImageCapture
                             i = sensor_msgs.msg.Image()
                             i.header = header
                             i.width = img.shot.image.cols
@@ -608,54 +568,37 @@ class SpotInterface:
                                 0, f.y, c.y,   \
                                 0,   0,  1]
                             
+                            # Transform from base_link to camera for current img
                             body_tform_cam = get_a_tform_b(img.shot.transforms_snapshot,
                                 BODY_FRAME_NAME,
                                 img.shot.frame_name_image_sensor)
-                            world_tform_body = get_a_tform_b(img.shot.transforms_snapshot,
-                                VISION_FRAME_NAME,
-                                BODY_FRAME_NAME)
-                            
-                            cam_tform_world = world_tform_body * body_tform_cam
-
-                            cam_tform_world_tf = geometry_msgs.msg.TransformStamped()
-                            cam_tform_world_tf.header.stamp = header.stamp
-                            cam_tform_world_tf.header.frame_id = "vision_odometry_frame"
-                            cam_tform_world_tf.child_frame_id = img.source.name
-                            cam_tform_world_tf.transform.translation.x = cam_tform_world.position.x
-                            cam_tform_world_tf.transform.translation.y = cam_tform_world.position.y
-                            cam_tform_world_tf.transform.translation.z = cam_tform_world.position.z
-                            cam_tform_world_tf.transform.rotation.x = cam_tform_world.rotation.x
-                            cam_tform_world_tf.transform.rotation.y = cam_tform_world.rotation.y
-                            cam_tform_world_tf.transform.rotation.z = cam_tform_world.rotation.z
-                            cam_tform_world_tf.transform.rotation.w = cam_tform_world.rotation.w
                             
                             # Generate camera to body Transform
-                            ko_tform_body_tf = geometry_msgs.msg.Transform()
-                            ko_tform_body_tf.translation.x = body_tform_cam.position.x
-                            ko_tform_body_tf.translation.y = body_tform_cam.position.y
-                            ko_tform_body_tf.translation.z = body_tform_cam.position.z
-                            ko_tform_body_tf.rotation.x = body_tform_cam.rotation.x
-                            ko_tform_body_tf.rotation.y = body_tform_cam.rotation.y
-                            ko_tform_body_tf.rotation.z = body_tform_cam.rotation.z
-                            ko_tform_body_tf.rotation.w = body_tform_cam.rotation.w
+                            body_tform_cam_tf = geometry_msgs.msg.Transform()
+                            body_tform_cam_tf.translation.x = body_tform_cam.position.x
+                            body_tform_cam_tf.translation.y = body_tform_cam.position.y
+                            body_tform_cam_tf.translation.z = body_tform_cam.position.z
+                            body_tform_cam_tf.rotation.x = body_tform_cam.rotation.x
+                            body_tform_cam_tf.rotation.y = body_tform_cam.rotation.y
+                            body_tform_cam_tf.rotation.z = body_tform_cam.rotation.z
+                            body_tform_cam_tf.rotation.w = body_tform_cam.rotation.w
 
                             camera_transform_stamped = geometry_msgs.msg.TransformStamped()
                             camera_transform_stamped.header.stamp = header.stamp
                             camera_transform_stamped.header.frame_id = "base_link"
-                            camera_transform_stamped.transform = ko_tform_body_tf
+                            camera_transform_stamped.transform = body_tform_cam_tf
                             camera_transform_stamped.child_frame_id = img.source.name
 
+                            # Publish body to camera static tf
+                            spot_tf_static_broadcaster.sendTransform(camera_transform_stamped)
+
+                            # Publish current image and camera info
                             image_only_pub.publish(i)
                             camera_info_pub.publish(cam_info)
 
-                            # Publish camera to body static tf
-                            spot_tf_static_broadcaster.sendTransform(camera_transform_stamped)
-
                     ''' Publish occupancy grid'''
-                    #TODO: Check if self.local_grid_types is a list of all these grid types and replace hardcoded ones
                     if occupancy_grid_pub.get_num_connections() > 0:
-                        local_grid_proto = self.grid_client.get_local_grids(
-                            ['terrain'])#, 'terrain_valid', 'intensity', 'no_step', 'obstacle_distance'])
+                        local_grid_proto = self.grid_client.get_local_grids(['terrain'])
                         markers = get_terrain_markers(local_grid_proto)
                         occupancy_grid_pub.publish(markers)
 
@@ -672,6 +615,7 @@ if __name__ == '__main__':
     bosdyn.client.util.add_common_arguments(parser)
     parser.add_argument('--motors_on', help='Power on motors [Y/n]', default="Y")
     options = parser.parse_args(sys.argv[1:])
+
     try:
         robot = SpotInterface(options)
         robot.start_spot_ros_interface()
