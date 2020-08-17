@@ -1,6 +1,6 @@
 		
 # Introduction 
-Enable programmatic control of the Boston Dynamic Spot robot through the [Robot Operating System](https://www.ros.org/) interface. 
+Enable programmatic control of the Boston Dynamic Spot robot through the [Robot Operating System](https://www.ros.org/) (ROS) interface. 
 
 # Overview
 
