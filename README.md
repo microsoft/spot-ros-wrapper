@@ -9,6 +9,7 @@ The [spot_ros_interface](./spot_ros_interface/) ROS package provides a ROS inter
 ## Architecture Overview
 ![System Architecture](./docs/SystemArchitecture.png)
 
+
 # Getting Started
 ## 1.	Installation process
 
