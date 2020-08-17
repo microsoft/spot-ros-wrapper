@@ -1,10 +1,14 @@
 		
 # Introduction 
-Enable programmatic control of the Boston Dynamic Spot robot through the Robot Operating System http://ros.org interface. 
+Enable programmatic control of the Boston Dynamic Spot robot through the [Robot Operating System](https://www.ros.org/) (ROS) interface. 
 
 # Overview
 
 The [spot_ros_interface](./spot_ros_interface/) ROS package provides a ROS interface to the Spot API converting ROS messages to API/gRPC calls to the Spot robot.
+
+## Architecture Overview
+![System Architecture](./docs/SystemArchitecture.png)
+
 
 # Getting Started
 ## 1.	Installation process
