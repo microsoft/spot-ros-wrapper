@@ -6,7 +6,7 @@ Enable programmatic control of the Boston Dynamic Spot robot through the [Robot 
 
 The [spot_ros_interface](./spot_ros_interface/README.md) ROS package provides a ROS interface to the Spot API converting ROS messages to API/gRPC calls to the Spot robot.
 
-## spot_ros_interface Architecture Overview
+## Architecture Overview
 ![System Architecture](./docs/SystemArchitecture.png)
 
 # Getting Started
