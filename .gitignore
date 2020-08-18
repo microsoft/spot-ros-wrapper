@@ -106,3 +106,7 @@ venv.bak/
 .vscode
 /.vs
 
+.catkin_tools
+devel/
+build/
+logs/
