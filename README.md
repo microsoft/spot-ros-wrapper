@@ -21,7 +21,7 @@ https://github.com/boston-dynamics/spot-sdk/blob/master/docs/python/quickstart.m
 
 #### 1.3 Upgrade Spot and Spot SDK to version 2.01
 
-Follow [Boston Dynamic's instructions for upgrading](https://www.bostondynamics.com/sites/default/files/inline-files/spot-2.0.1-release-notes.pdf)
+Follow [Boston Dynamics' instructions for upgrading](https://www.bostondynamics.com/sites/default/files/inline-files/spot-2.0.1-release-notes.pdf)
 
 #### 1.4 Set up ROS Noetic in WSL:
 - Configure your Ubuntu repositories to allow "restricted," "universe," and "multiverse". Follow instructions [here](https://help.ubuntu.com/community/Repositories/CommandLine).
