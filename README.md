@@ -19,12 +19,9 @@ https://docs.microsoft.com/en-us/windows/wsl/install-win10
 #### 1.2 Download and install Spot SDK (in WSL environment):
 https://github.com/boston-dynamics/spot-sdk/blob/master/docs/python/quickstart.md#getting-the-code
 
-#### 1.3 Set up app token to allow communication with Spot:
+#### 1.3 Upgrade Spot and Spot SDK to version 2.01
 
-Copy token from `~/ms_robotics_spot/src/docs/tokens/dev.app_token` to the default location ~/.bosdyn/dev.app_token:
-```
-cp ~/ms_robotics_spot/src/docs/tokens/dev.app_token ~/.bosdyn
-```
+Follow [Boston Dynamic's instructions for upgrading](https://www.bostondynamics.com/sites/default/files/inline-files/spot-2.0.1-release-notes.pdf)
 
 #### 1.4 Set up ROS Noetic in WSL:
 - Configure your Ubuntu repositories to allow "restricted," "universe," and "multiverse". Follow instructions [here](https://help.ubuntu.com/community/Repositories/CommandLine).
