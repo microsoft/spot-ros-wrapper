@@ -564,19 +564,22 @@ class SpotInterface:
                                 i.encoding = 'mono8'
                                 image_only_pub.publish(i)
 
-                            # CameraInfo
-                            cam_info = sensor_msgs.msg.CameraInfo()
-                            cam_info.header = i.header
-                            cam_info.width = i.width
-                            cam_info.height = i.height
-                            cam_info.distortion_model = "plumb_bob"
-                            cam_info.D = [0.0,0.0,0.0,0.0]
-                            f = img.source.pinhole.intrinsics.focal_length
-                            c = img.source.pinhole.intrinsics.principal_point
-                            cam_info.K = \
-                                [f.x, 0, c.x,  \
-                                0, f.y, c.y,   \
-                                0,   0,  1]
+                                # CameraInfo
+                                cam_info = sensor_msgs.msg.CameraInfo()
+                                cam_info.header = i.header
+                                cam_info.width = i.width
+                                cam_info.height = i.height
+                                cam_info.distortion_model = "plumb_bob"
+                                cam_info.D = [0.0,0.0,0.0,0.0]
+                                f = img.source.pinhole.intrinsics.focal_length
+                                c = img.source.pinhole.intrinsics.principal_point
+                                cam_info.K = \
+                                    [f.x, 0, c.x,  \
+                                    0, f.y, c.y,   \
+                                    0,   0,  1]
+
+                                # Publish camera info
+                                camera_info_pub.publish(cam_info)
                             
                             # Transform from base_link to camera for current img
                             body_tform_cam = get_a_tform_b(img.shot.transforms_snapshot,
@@ -601,9 +604,6 @@ class SpotInterface:
 
                             # Publish body to camera static tf
                             spot_tf_static_broadcaster.sendTransform(camera_transform_stamped)
-
-                            # Publish camera info
-                            camera_info_pub.publish(cam_info)
 
                     ''' Publish occupancy grid'''
                     if occupancy_grid_pub.get_num_connections() > 0:
