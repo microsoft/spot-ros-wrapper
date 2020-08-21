@@ -89,7 +89,7 @@ class SpotInterface:
         ]
 
         self.depth_image_source_names = [
-            src.name for src in self.image_client.list_image_sources() if "depth" in src.name
+            src.name for src in self.image_client.list_image_sources() if "depth_in_visual_frame" in src.name
         ]
 
         # Client to request robot state
@@ -524,19 +524,25 @@ class SpotInterface:
                     if self.third_person_view:
                         joint_state_pub.publish(kinematic_state.joint_states)
 
-                    ''' Publish Images'''
-                    img_reqs = [image_pb2.ImageRequest(image_source_name=source, image_format=image_pb2.Image.FORMAT_RAW) for source in self.depth_image_source_names[5:6]+self.image_source_names[2:3]]
+                    ''' Publish Images and Depth Images'''
+                    # TODO: Add param to filter which images/dept images get published (bandwidth constraints)
+                    img_reqs = [image_pb2.ImageRequest(image_source_name=source, image_format=image_pb2.Image.FORMAT_RAW) for source in self.image_source_names]
+                    depth_img_reqs = [image_pb2.ImageRequest(image_source_name=source, image_format=image_pb2.Image.FORMAT_RAW) for source in self.depth_image_source_names]
                     image_list = self.image_client.get_image(img_reqs)
-                    # print(self.depth_image_source_names)
-                    # print(self.image_source_names)
+                    depth_image_list = self.image_client.get_image(depth_img_reqs)
+                    
+                    full_list = []
+                    for i in image_list:
+                        full_list.append(i)
+                    for i in depth_image_list:
+                        full_list.append(i)
 
-                    for img in image_list:
+                    for img in full_list:
                         if img.status == image_pb2.ImageResponse.STATUS_OK:
 
                             header = std_msgs.msg.Header()
                             header.stamp = t.header.stamp
                             header.frame_id = img.source.name
-
 
                             # Convert data to ROS Image
                             i = sensor_msgs.msg.Image()
