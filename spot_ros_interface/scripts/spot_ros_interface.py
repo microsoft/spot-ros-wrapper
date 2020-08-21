@@ -88,7 +88,7 @@ class SpotInterface:
             src.name for src in self.image_client.list_image_sources() if "image" in src.name
         ]
 
-        self.depth_image_sources = [
+        self.depth_image_source_names = [
             src.name for src in self.image_client.list_image_sources() if "depth" in src.name
         ]
 
@@ -480,9 +480,8 @@ class SpotInterface:
         camera_info_pub = rospy.Publisher(
             "spot_cam_info", sensor_msgs.msg.CameraInfo, queue_size=20)
 
-        # TODO: Publish depth images
-        # depth_image_pub = rospy.Publisher(
-        #     "depth_image", sensor_msgs.msg.Image, queue_size=20)
+        depth_image_pub = rospy.Publisher(
+            "spot_depth_image", sensor_msgs.msg.Image, queue_size=20)
 
         # For RViz 3rd person POV visualization
         if self.third_person_view:
@@ -526,8 +525,10 @@ class SpotInterface:
                         joint_state_pub.publish(kinematic_state.joint_states)
 
                     ''' Publish Images'''
-                    img_reqs = [image_pb2.ImageRequest(image_source_name=source, image_format=image_pb2.Image.FORMAT_RAW) for source in self.image_source_names[2:3]]
+                    img_reqs = [image_pb2.ImageRequest(image_source_name=source, image_format=image_pb2.Image.FORMAT_RAW) for source in self.depth_image_source_names[5:6]+self.image_source_names[2:3]]
                     image_list = self.image_client.get_image(img_reqs)
+                    # print(self.depth_image_source_names)
+                    # print(self.image_source_names)
 
                     for img in image_list:
                         if img.status == image_pb2.ImageResponse.STATUS_OK:
@@ -536,23 +537,26 @@ class SpotInterface:
                             header.stamp = t.header.stamp
                             header.frame_id = img.source.name
 
-                            if img.shot.image.pixel_format == image_pb2.Image.PIXEL_FORMAT_DEPTH_U16:
-                                dtype = np.uint16
-                            else:
-                                dtype = np.uint8
 
-                            if img.shot.image.format == image_pb2.Image.FORMAT_RAW:
-                                image = np.fromstring(img.shot.image.data, dtype=dtype)
-                                image = image.reshape(img.shot.image.rows, img.shot.image.cols)
-
-                            # Make Image component of ImageCapture
+                            # Convert data to ROS Image
                             i = sensor_msgs.msg.Image()
                             i.header = header
                             i.width = img.shot.image.cols
                             i.height = img.shot.image.rows
-                            i.data = img.shot.image.data if img.shot.image.format != image_pb2.Image.FORMAT_RAW else image.tobytes()
-                            i.step = img.shot.image.cols
-                            i.encoding = 'mono8'
+                            i.data = img.shot.image.data
+
+                            if img.shot.image.pixel_format == image_pb2.Image.PIXEL_FORMAT_DEPTH_U16:
+                                #Depth images are 16 bit
+                                dtype = np.uint16
+                                i.step = img.shot.image.cols*2
+                                i.encoding = 'mono16'
+                                depth_image_pub.publish(i)
+                            else:
+                                # Fisheye images are 8 bit
+                                dtype = np.uint8
+                                i.step = img.shot.image.cols
+                                i.encoding = 'mono8'
+                                image_only_pub.publish(i)
 
                             # CameraInfo
                             cam_info = sensor_msgs.msg.CameraInfo()
@@ -592,8 +596,7 @@ class SpotInterface:
                             # Publish body to camera static tf
                             spot_tf_static_broadcaster.sendTransform(camera_transform_stamped)
 
-                            # Publish current image and camera info
-                            image_only_pub.publish(i)
+                            # Publishcamera info
                             camera_info_pub.publish(cam_info)
 
                     ''' Publish occupancy grid'''
