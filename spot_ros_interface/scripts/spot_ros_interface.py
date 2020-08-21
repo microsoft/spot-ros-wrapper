@@ -602,7 +602,7 @@ class SpotInterface:
                             # Publish body to camera static tf
                             spot_tf_static_broadcaster.sendTransform(camera_transform_stamped)
 
-                            # Publishcamera info
+                            # Publish camera info
                             camera_info_pub.publish(cam_info)
 
                     ''' Publish occupancy grid'''
