@@ -80,6 +80,21 @@ To verify the installation, run `roscore` in the terminal. This should start a r
 
 Congratulations! You have just set up ROS. Now let's install the  the dependencies.
 
+
+#### 1.5 Install VcXSrv and Set up WSL Display
+
+Install VcXsrv: https://sourceforge.net/projects/vcxsrv/
+
+Add the following to your `.bashrc`
+```
+# Forward GUI windows to vcxsrv
+export DISPLAY=:0
+export LIBGL_ALWAYS_INDIRECT=
+```
+
+Start VcXsrv *without* native OpenGL:
+![VcXsrv without native OpenGL](./docs/StartingVcXsrv.png)
+
 ## 2.	Software dependencies
 
 Make `install_dependencies.sh` executable and run it:
