@@ -66,11 +66,11 @@ This will take some time. Go grab a coffee :coffee:.
 
 Once that is done, let us verify the installation. You must source this script in every bash terminal you use ROS in:
 ```
-source /opt/ros/melodic/setup.bash
+source /opt/ros/noetic/setup.bash
 ```
 To automatically source it whenever you open a new terminal, add it to your .bashrc:
 ```
-echo "source /opt/ros/melodic/setup.bash" >> ~/.bashrc
+echo "source /opt/ros/noetic/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 ```
 *Note:* If you were in a virtual environment, you will have to re-activate your virtual environment after sourcing your .bashrc
@@ -101,7 +101,7 @@ Request spot.urdf and .stl mesh files from Boston Dynamics in order to be able t
 The directory structure must be as follows for compatibility with the `rviz_display.launch` file:
 
 ```
-spot-ros-wrapper/
+workspace_directory/
 	...
 	spot_urdf/
 		...
@@ -120,14 +120,14 @@ spot-ros-wrapper/
 
 Make `install_dependencies.sh` executable and run it:
 ```
-cd ~/ms_robotics_spot/src/install_script/
+cd ~/spot-ros-wrapper/src/install_script/
 chmod +x install_dependencies.sh
 ./install_dependencies.sh
 ```
 ## 3.   Set up catkin workspace
-Now, go to your catkin workspace directory (e.g. `~/ms_robotics_spot`) and setup your catkin workspace:
+Now, go to your catkin workspace directory (e.g. `~/spot-ros-wrapper`) and setup your catkin workspace:
 ```
-cd ~/ms_robotics_spot
+cd ~/spot-ros-wrapper
 catkin config --init --merge-devel --cmake-args -DCMAKE_BUILD_TYPE=Release
 catkin config --extend /opt/ros/noetic
 ```
@@ -154,13 +154,13 @@ workspace_directory/
 # Build and Run
 Go to your catkin workspace directory, and build
 ```
-cd ~/ms_robotics_spot
+cd ~/spot-ros-wrapper
 catkin build
 ```
 
 After the build finishes, you must source the environment. **This must be done every time after building.**
 ```
-source ~/ms_robotics_spot/devel/setup.bash
+source ~/spot-ros-wrapper/devel/setup.bash
 ```
 
 Now let us start the ROS Wrapper Node. We first need to run `roscore`:
@@ -173,7 +173,7 @@ Open a new terminal, source your virtual environment and source the latest build
 ```
 # In a new terminal
 activate_venv spot_venv
-cd ~/ms_robotics_spot
+cd ~/spot-ros-wrapper
 source devel/setup.bash
 ```
 And finally, let us start the ROS Wrapper node:
