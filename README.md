@@ -85,7 +85,7 @@ Congratulations! You have just set up ROS. Now let's install the  the dependenci
 
 Install VcXsrv: https://sourceforge.net/projects/vcxsrv/
 
-Add the following to your `.bashrc`
+Add the following to your .bashrc:
 ```
 # Forward GUI windows to vcxsrv
 export DISPLAY=:0
@@ -94,6 +94,27 @@ export LIBGL_ALWAYS_INDIRECT=
 
 Start VcXsrv *without* native OpenGL:
 ![VcXsrv without native OpenGL](./docs/StartingVcXsrv.png)
+
+#### 1.6 Set Up URDF Visualization (Optional)
+
+Request spot.urdf and .stl mesh files from Boston Dynamics in order to be able to utilize the real-time RViz visualization of Spot's state.
+The directory structure must be as follows for compatibility with the `rviz_display.launch` file:
+
+```
+spot-ros-wrapper/
+	...
+	spot_urdf/
+		...
+		link_models/
+			base.stl
+			fl.lleg.stl
+			fr.hip.stl
+			...
+			hl.uleg.stl
+			hr.lleg.stl
+		urdf/
+			spot.urdf
+```
 
 ## 2.	Software dependencies
 
