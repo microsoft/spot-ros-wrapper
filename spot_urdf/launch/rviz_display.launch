@@ -1,6 +1,6 @@
 <launch>
 
-  <arg name="model" default="$(find spot_urdf)/urdf/spot.urdf"/>
+  <arg name="model" default="$(find spot_urdf)/urdf/spot.urdf.xacro"/>
   <arg name="gui" default="true" />
   <arg name="rvizconfig" default="$(find spot_urdf)/rviz/occupancy_grid_config.rviz" />
 
