@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.0.2)
 project(spot_ros_interface)
 
 ## Find catkin and any catkin packages
@@ -9,4 +9,8 @@ catkin_package()
 
 include_directories(include ${catkin_INCLUDE_DIRS})
 
-catkin_python_setup()
+catkin_install_python(PROGRAMS scripts/grid_utils.py
+                               scripts/keyboard_teleop.py
+                               scripts/spot_ros_interface.py
+                               scripts/tf_remapper.py
+                      DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
